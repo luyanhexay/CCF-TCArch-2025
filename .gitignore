@@ -1,0 +1,10 @@
+.cursor/
+.cursor-server/
+.vscode/
+
+.ssh/
+.cache/
+.bash_history
+.bash_logout
+.bashrc
+.profile
