@@ -16,7 +16,7 @@
 // 小规模时直接在 CPU 上完成整段扫描（避免 GPU 启动开销）
 // 阈值可按机器调，单位：元素个数
 #ifndef CPU_FALLBACK_THRESHOLD
-#define CPU_FALLBACK_THRESHOLD (1 << 20) // 16384
+#define CPU_FALLBACK_THRESHOLD (1 << 13) // 16384
 #endif
 
 // 错误检查
@@ -49,7 +49,7 @@ __global__ void scan_block_2elems(const int *__restrict__ in,
     const int bid = blockIdx.x;
     const int base = bid * BLOCK * 2;
 
-    // 当前块的有效元素数
+    // 本块有效元素数 n
     const int n = max(0, min(2 * BLOCK, N - base));
     if (n <= 0)
     {
@@ -58,48 +58,60 @@ __global__ void scan_block_2elems(const int *__restrict__ in,
         return;
     }
 
+    // 计算 m = nextPow2(n)（建满二叉树）
+    int m = 1;
+    while (m < n)
+        m <<= 1; // m <= 2*BLOCK 恒成立
+
     // 全局位置
     const int i0 = base + tid;
     const int i1 = base + BLOCK + tid;
 
-    // 读入：越界记 0
+    // 读两元素（越界读 0）
     int v0 = (i0 < N) ? in[i0] : 0;
     int v1 = (i1 < N) ? in[i1] : 0;
 
-    // 写入共享内存（只对有效范围）
-    if (tid < n)
-        s[tid] = v0;
-    if (tid + BLOCK < n)
-        s[tid + BLOCK] = v1;
+    // 写共享内存；对 [n, m) 做 0 填充，避免后续访问未初始化数据
+    int j0 = tid;
+    int j1 = tid + BLOCK;
+
+    if (j0 < n)
+        s[j0] = v0;
+    else if (j0 < m)
+        s[j0] = 0;
+
+    if (j1 < n)
+        s[j1] = v1;
+    else if (j1 < m)
+        s[j1] = 0;
+
     __syncthreads();
 
-    // ---- upsweep：构建树，得到总和在末尾 ----
-    // 逻辑长度 n（可能不是 2 的幂），每步判断 idx<n
-    for (int offset = 1; offset < n; offset <<= 1)
+    // ---- upsweep：用 m（2 的幂）建树 ----
+    for (int offset = 1; offset < m; offset <<= 1)
     {
         __syncthreads();
         int idx = ((tid + 1) << 1) * offset - 1;
-        if (idx < n)
+        if (idx < m)
             s[idx] += s[idx - offset];
     }
     __syncthreads();
 
-    // 保存总和，置末尾为 0，作为 exclusive 的起点
+    // 总和在 s[m-1]；写出块和，并把 s[m-1] 清零作为 exclusive 根
     if (tid == 0)
     {
-        int total = s[n - 1];
         if (blockSums)
-            blockSums[bid] = total;
-        s[n - 1] = 0;
+            blockSums[bid] = s[m - 1];
+        s[m - 1] = 0;
     }
     __syncthreads();
 
-    // ---- downsweep：翻转树，得到 exclusive scan ----
-    for (int offset = n >> 1; offset >= 1; offset >>= 1)
+    // ---- downsweep：同样用 m ----
+    for (int offset = (m >> 1); offset >= 1; offset >>= 1)
     {
         __syncthreads();
         int idx = ((tid + 1) << 1) * offset - 1;
-        if (idx < n)
+        if (idx < m)
         {
             int t = s[idx - offset];
             s[idx - offset] = s[idx];
@@ -111,7 +123,7 @@ __global__ void scan_block_2elems(const int *__restrict__ in,
     // 写回：只写有效范围
     if (i0 < N)
         out[i0] = s[tid];
-    if (i1 < N && (tid + BLOCK) < n)
+    if (i1 < N)
         out[i1] = s[tid + BLOCK];
 }
 
@@ -249,6 +261,9 @@ void solve(const int *input, int *output, int N)
         // 回加
         hipLaunchKernelGGL(uniform_add, grid, block, 0, 0, d_blockSums, d_out,
                            N);
+        HIP_CHECK(hipGetLastError());
+    }
+    {
         dim3 blk(BLOCK);
         dim3 grd((N + BLOCK - 1) / BLOCK);
         hipLaunchKernelGGL(to_inclusive, grd, blk, 0, 0, d_in, d_out, N);
