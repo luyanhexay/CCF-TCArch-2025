@@ -2,7 +2,7 @@ HIPCC = hipcc
 
 TARGET = apsp
 
-SRCS = main.cpp 
+SRCS = main.cpp kernel.hip
 
 HEADERS = main.h
 
