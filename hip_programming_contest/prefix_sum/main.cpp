@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
 
     for (int i = 0; i < N; ++i)
         std::cout << output[i] << " ";
-        // printf("%d ", output[i]);
+    // printf("%d ", output[i]);
     // std::cout << std::endl;
     std::cout << std::endl;
 }
