@@ -25,28 +25,55 @@ __global__ void reduceMaxKernel(const float* __restrict__ x, float* __restrict__
     extern __shared__ float sdataF[];
     const int tid = threadIdx.x;
     const int stride = blockDim.x * gridDim.x;
-    int idx = blockIdx.x * blockDim.x + tid;
 
     float localMax = -FLT_MAX;
-    for (; idx < n; idx += stride) {
-        float v = x[idx];
+    // 向量化读取 float4
+    const int numVec = n >> 2; // n/4
+    const float4* x4 = reinterpret_cast<const float4*>(x);
+    int idx4 = blockIdx.x * blockDim.x + tid;
+    int stride4 = stride;
+    for (; idx4 < numVec; idx4 += stride4) {
+        float4 v4 = x4[idx4];
+        localMax = v4.x > localMax ? v4.x : localMax;
+        localMax = v4.y > localMax ? v4.y : localMax;
+        localMax = v4.z > localMax ? v4.z : localMax;
+        localMax = v4.w > localMax ? v4.w : localMax;
+    }
+    // 处理尾部不足 4 个元素
+    int base = numVec << 2;
+    int idxTail = base + blockIdx.x * blockDim.x + tid;
+    for (; idxTail < n; idxTail += stride) {
+        float v = x[idxTail];
         localMax = v > localMax ? v : localMax;
     }
 
-    sdataF[tid] = localMax;
+    // Wavefront 内归约 (shuffle)
+    float warpVal = localMax;
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        float other = __shfl_down(warpVal, offset);
+        warpVal = warpVal > other ? warpVal : other;
+    }
+    int lane = tid & (warpSize - 1);
+    int numWarps = (blockDim.x + warpSize - 1) / warpSize;
+    int warpId = tid / warpSize;
+
+    if (lane == 0) {
+        sdataF[warpId] = warpVal;
+    }
     __syncthreads();
 
-    // 共享内存内树形归约
-    for (int offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
-        if (tid < offset) {
-            float other = sdataF[tid + offset];
-            sdataF[tid] = sdataF[tid] > other ? sdataF[tid] : other;
+    if (warpId == 0) {
+        float blockVal = -FLT_MAX;
+        if (lane < numWarps) {
+            blockVal = sdataF[lane];
         }
-        __syncthreads();
-    }
-
-    if (tid == 0) {
-        blockMax[blockIdx.x] = sdataF[0];
+        for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+            float other = __shfl_down(blockVal, offset);
+            blockVal = blockVal > other ? blockVal : other;
+        }
+        if (lane == 0) {
+            blockMax[blockIdx.x] = blockVal;
+        }
     }
 }
 
@@ -62,25 +89,67 @@ __global__ void reduceSumExpKernel(const float* __restrict__ x,
 
     float m = *mPtr;
     double localSum = 0.0;
-    for (; idx < n; idx += stride) {
-        float shifted = x[idx] - m;
+    // 向量化读取/写入 float4
+    const int numVec = n >> 2; // n/4
+    const float4* x4 = reinterpret_cast<const float4*>(x);
+    float4* y4 = reinterpret_cast<float4*>(y);
+    int idx4 = blockIdx.x * blockDim.x + tid;
+    int stride4 = stride;
+    for (; idx4 < numVec; idx4 += stride4) {
+        float4 v4 = x4[idx4];
+        float s0 = v4.x - m;
+        float s1 = v4.y - m;
+        float s2 = v4.z - m;
+        float s3 = v4.w - m;
+        double t0 = (double)expf(s0);
+        double t1 = (double)expf(s1);
+        double t2 = (double)expf(s2);
+        double t3 = (double)expf(s3);
+        float4 out4;
+        out4.x = (float)t0;
+        out4.y = (float)t1;
+        out4.z = (float)t2;
+        out4.w = (float)t3;
+        y4[idx4] = out4; // 缓存 t_i
+        localSum += (t0 + t1 + t2 + t3);
+    }
+    // 尾部处理
+    int base = numVec << 2;
+    int idxTail = base + idx;
+    for (; idxTail < n; idxTail += stride) {
+        float shifted = x[idxTail] - m;
         double t = (double)expf(shifted);
-        y[idx] = (float)t; // 缓存 t_i，避免后续重复计算 exp
+        y[idxTail] = (float)t;
         localSum += t;
     }
 
-    sdataD[tid] = localSum;
+    // Wavefront 内归约 (shuffle)
+    double warpSum = localSum;
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        double other = __shfl_down(warpSum, offset);
+        warpSum += other;
+    }
+    int lane = tid & (warpSize - 1);
+    int numWarps = (blockDim.x + warpSize - 1) / warpSize;
+    int warpId = tid / warpSize;
+
+    if (lane == 0) {
+        sdataD[warpId] = warpSum;
+    }
     __syncthreads();
 
-    for (int offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
-        if (tid < offset) {
-            sdataD[tid] += sdataD[tid + offset];
+    if (warpId == 0) {
+        double blockVal = 0.0;
+        if (lane < numWarps) {
+            blockVal = sdataD[lane];
         }
-        __syncthreads();
-    }
-
-    if (tid == 0) {
-        blockSums[blockIdx.x] = sdataD[0];
+        for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+            double other = __shfl_down(blockVal, offset);
+            blockVal += other;
+        }
+        if (lane == 0) {
+            blockSums[blockIdx.x] = blockVal;
+        }
     }
 }
 
@@ -90,8 +159,24 @@ __global__ void softmaxNormalizeKernel(float* __restrict__ y, int n, const doubl
 
     double sumExp = *sumExpPtr;
     float denom = (float)fmax(1e-12, sumExp);
-    for (; idx < n; idx += stride) {
-        y[idx] = y[idx] / denom;
+    // 向量化归一化
+    const int numVec = n >> 2; // n/4
+    float4* y4 = reinterpret_cast<float4*>(y);
+    int idx4 = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride4 = stride;
+    for (; idx4 < numVec; idx4 += stride4) {
+        float4 v4 = y4[idx4];
+        v4.x = v4.x / denom;
+        v4.y = v4.y / denom;
+        v4.z = v4.z / denom;
+        v4.w = v4.w / denom;
+        y4[idx4] = v4;
+    }
+    // 尾部处理
+    int base = numVec << 2;
+    int idxTail = base + idx;
+    for (; idxTail < n; idxTail += stride) {
+        y[idxTail] = y[idxTail] / denom;
     }
 }
 
@@ -106,19 +191,29 @@ __global__ void reduceFinalMaxKernel(const float* __restrict__ inVals, float* __
         localMax = v > localMax ? v : localMax;
     }
 
-    sdataF[tid] = localMax;
-    __syncthreads();
-
-    for (int offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
-        if (tid < offset) {
-            float other = sdataF[tid + offset];
-            sdataF[tid] = sdataF[tid] > other ? sdataF[tid] : other;
-        }
-        __syncthreads();
+    // Wavefront 内归约
+    float warpVal = localMax;
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        float other = __shfl_down(warpVal, offset);
+        warpVal = warpVal > other ? warpVal : other;
     }
-
-    if (tid == 0) {
-        *outVal = sdataF[0];
+    int lane = tid & (warpSize - 1);
+    int numWarps = (blockDim.x + warpSize - 1) / warpSize;
+    int warpId = tid / warpSize;
+    if (lane == 0) {
+        sdataF[warpId] = warpVal;
+    }
+    __syncthreads();
+    if (warpId == 0) {
+        float blockVal = -FLT_MAX;
+        if (lane < numWarps) blockVal = sdataF[lane];
+        for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+            float other = __shfl_down(blockVal, offset);
+            blockVal = blockVal > other ? blockVal : other;
+        }
+        if (lane == 0) {
+            *outVal = blockVal;
+        }
     }
 }
 
@@ -131,18 +226,29 @@ __global__ void reduceFinalSumKernel(const double* __restrict__ inVals, double* 
         localSum += inVals[i];
     }
 
-    sdataD[tid] = localSum;
-    __syncthreads();
-
-    for (int offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
-        if (tid < offset) {
-            sdataD[tid] += sdataD[tid + offset];
-        }
-        __syncthreads();
+    // Wavefront 内归约
+    double warpVal = localSum;
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        double other = __shfl_down(warpVal, offset);
+        warpVal += other;
     }
-
-    if (tid == 0) {
-        *outVal = sdataD[0];
+    int lane = tid & (warpSize - 1);
+    int numWarps = (blockDim.x + warpSize - 1) / warpSize;
+    int warpId = tid / warpSize;
+    if (lane == 0) {
+        sdataD[warpId] = warpVal;
+    }
+    __syncthreads();
+    if (warpId == 0) {
+        double blockVal = 0.0;
+        if (lane < numWarps) blockVal = sdataD[lane];
+        for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+            double other = __shfl_down(blockVal, offset);
+            blockVal += other;
+        }
+        if (lane == 0) {
+            *outVal = blockVal;
+        }
     }
 }
 

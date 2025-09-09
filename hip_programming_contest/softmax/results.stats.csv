@@ -1,0 +1,6 @@
+"Name","Calls","TotalDurationNs","AverageNs","Percentage"
+"reduceFinalMaxKernel(float const*, float*, int)",1,6240,6240,22.80701754385965
+"reduceFinalSumKernel(double const*, double*, int)",1,6240,6240,22.80701754385965
+"reduceSumExpKernel(float const*, float*, double*, int, float const*)",1,5920,5920,21.637426900584796
+"reduceMaxKernel(float const*, float*, int)",1,5600,5600,20.46783625730994
+"softmaxNormalizeKernel(float*, int, double const*)",1,3360,3360,12.280701754385966

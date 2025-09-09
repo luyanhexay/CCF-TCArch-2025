@@ -1,0 +1,62 @@
+Softmax 优化路线图与诊断步骤
+
+一、总体策略
+- 保留当前多趟实现作为基线，逐步演进到单趟分块在线 Softmax。
+- 每一步都先确保正确性（通过自测脚本），再进行性能测量（rocprof）。
+
+二、待办任务（按优先级）
+1) 实现向量化访存（float4）覆盖 max/sumexp/normalize，并处理尾部
+2) 用 Wavefront 内 Shuffle + LDS 两级归约替换共享内存树归约
+3) 实现分块单趟在线 Softmax 融合内核（维护 running m、l；使用 LDS tile）
+4) 消除 LDS 银行冲突（优先 padding，必要时 XOR swizzling）
+5) 调优启动参数与 __launch_bounds__，平衡 VGPR/LDS 与占用率
+6) 实现短向量专用核与主机端调度器（按阈值切换）
+
+三、正确性与测评
+- 构建：
+  make HIPARCH=gfx908 -j
+
+- 自测评：使用集群作业脚本提交跑全量样例
+  sbatch self_test_softmax.sbatch
+  # 产出日志：output_<jobid>.log；输出目录：my_outputs/
+
+- 本地快速验证（可选，若无集群环境）：
+  ./softmax testcases/1.in > my_outputs/1.myout
+  python3 /home/user059/hip_programming_contest/verify.py my_outputs/1.myout testcases/1.out
+
+四、性能剖析（rocprof）
+- 单用例快速 profiling：
+  rocprof --hip-trace --timestamp on --stats ./softmax testcases/1.in
+
+- 关注指标：
+  - 总 kernel 时间与各 kernel 占比
+  - HBM 读写带宽、访存事务（是否达到合并/向量化效果）
+  - Occupancy/波前并发、VGPR/LDS 使用
+
+五、完成标准
+- O1：单用例内核时间显著下降（访存指令数减少），正确性通过
+- O2：块内归约时间下降，LDS 访问减少，正确性通过
+- O3：HBM 访问降至 1 读 1 写，端到端时间显著优于多趟方案
+- O4：LDS 银行冲突率接近 0
+- O5：针对目标 GPU（MI100/gfx908）找到最优 blockDim 与 launch bounds
+- O6：短向量场景（如 N<64/128）显著提速，功能正确
+
+六、阶段成果（O1 向量化访存 float4）
+- 正确性：output_665.log 显示 10/10 全通过，Total execution time: 7.93s。
+- Profiling（单用例，results.*）：
+  - Kernel 端耗时（results.stats.csv）：
+    reduceMax ~6.40µs，reduceSumExp ~5.28µs，reduceFinalMax ~4.16µs，reduceFinalSum ~4.16µs，normalize ~3.68µs；合计 ~23.7µs。
+  - HIP API（results.hip_stats.csv）：hipMemcpy 占比 ~99.28%，hipLaunchKernel ~0.31%。
+  - 设备内拷贝（results.copy_stats.csv）：D2D 拷贝 2 次，合计 ~15.84µs（微小）。
+- 结论：
+  - float4 向量化后，内核阶段已非主要瓶颈；总体耗时被 H2D/D2H 传输与多趟读写放大。
+  - 下一步优先通过 O2+O3 降低内核内归约成本并合并访存趟数（迈向单趟在线 Softmax），从根因上降低 HBW 压力与调度开销。
+
+七、阶段成果（O2 Shuffle+LDS 两级归约）
+- 正确性：output_692.log 显示 10/10 全通过，Total execution time: 6.09s（较 O1 的 7.93s 再降 ~23%）。
+- Profiling（单用例，results.*）：
+  - Kernel 端耗时（results.stats.csv）：reduceMax ~5.60µs，reduceSumExp ~5.92µs，reduceFinalMax ~6.24µs，reduceFinalSum ~6.24µs，normalize ~3.36µs；合计 ~27.4µs（注：单例统计抖动、API主导）。
+  - HIP API（results.hip_stats.csv）：hipMemcpy ~99.29%，hipLaunchKernel ~0.24%。
+- 结论：
+  - 端到端时间显著改善（更好的内核效率与调度）；仍然受 H2D/D2H 主导。
+  - 下一步进入 O3：融合为单趟在线 Softmax，目标将 HBM 访问降至 1 读 1 写。
