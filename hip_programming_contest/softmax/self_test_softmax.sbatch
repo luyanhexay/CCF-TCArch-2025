@@ -5,11 +5,14 @@
 #SBATCH --gres=gpu:1                # 申请 1 张 GPU 卡
 #SBATCH -o output_%j.log            # 将日志输出到 output_<job_id>.log 文件
 #SBATCH --mem=32G
+#SBATCH -D /home/user059/hip_programming_contest/softmax  # 固定工作目录，避免相对路径问题
 
 # --- Script Configuration ---
 # C++ 编译器及参数
 COMPILER="hipcc"
-CXX_FLAGS="-O2"
+# 允许通过环境变量覆盖线程数（TPB）和优化等级
+# 用法: sbatch --export=TPB=128,OPT_O=3 self_test_softmax.sbatch
+CXX_FLAGS="-O${OPT_O:-2}"
 
 # 源文件和可执行文件名
 SOURCE_FILES="main.cpp kernel.hip" # Softmax 由 main.cpp + kernel.hip 组成
@@ -43,7 +46,12 @@ mkdir -p ${MY_OUTPUT_DIR}
 
 # 2. 编译代码
 echo "STEP 1: Compiling source code..."
-${COMPILER} ${CXX_FLAGS} -o ${EXECUTABLE} ${SOURCE_FILES}
+if [ -n "${TPB}" ]; then
+    echo "Compiling with TPB=${TPB}"
+    ${COMPILER} ${CXX_FLAGS} -DTPB=${TPB} -o ${EXECUTABLE} ${SOURCE_FILES}
+else
+    ${COMPILER} ${CXX_FLAGS} -o ${EXECUTABLE} ${SOURCE_FILES}
+fi
 
 # 检查编译是否成功
 if [ ! -f ./${EXECUTABLE} ]; then

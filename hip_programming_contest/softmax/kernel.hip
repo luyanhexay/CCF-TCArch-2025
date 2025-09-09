@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <math.h>
+#include <stdint.h>
 
 #ifndef TPB
 #define TPB 256
@@ -21,32 +22,78 @@
     } \
 } while(0)
 
+// 组合两段 softmax 运行统计 (m, l) 的合并运算
+// 输入 a=(m_a, l_a), b=(m_b, l_b)
+// 输出 (m, l):
+//   m = max(m_a, m_b)
+//   l = l_a * exp(m_a - m) + l_b * exp(m_b - m)
+__device__ inline void combineRunningStats(float& m_acc, double& l_acc,
+                                           float m_other, double l_other) {
+    float m_new = m_acc > m_other ? m_acc : m_other;
+    double l_new = 0.0;
+    if (l_acc != 0.0) {
+        l_new += l_acc * exp((double)(m_acc - m_new));
+    }
+    if (l_other != 0.0) {
+        l_new += l_other * exp((double)(m_other - m_new));
+    }
+    m_acc = m_new;
+    l_acc = l_new;
+}
+
 __global__ void reduceMaxKernel(const float* __restrict__ x, float* __restrict__ blockMax, int n) {
     extern __shared__ float sdataF[];
     const int tid = threadIdx.x;
     const int stride = blockDim.x * gridDim.x;
-    int idx = blockIdx.x * blockDim.x + tid;
 
     float localMax = -FLT_MAX;
-    for (; idx < n; idx += stride) {
-        float v = x[idx];
+    // 向量化读取 float4
+    const int numVec = n >> 2; // n/4
+    const float4* x4 = reinterpret_cast<const float4*>(x);
+    int idx4 = blockIdx.x * blockDim.x + tid;
+    int stride4 = stride;
+    for (; idx4 < numVec; idx4 += stride4) {
+        float4 v4 = x4[idx4];
+        localMax = v4.x > localMax ? v4.x : localMax;
+        localMax = v4.y > localMax ? v4.y : localMax;
+        localMax = v4.z > localMax ? v4.z : localMax;
+        localMax = v4.w > localMax ? v4.w : localMax;
+    }
+    // 处理尾部不足 4 个元素
+    int base = numVec << 2;
+    int idxTail = base + blockIdx.x * blockDim.x + tid;
+    for (; idxTail < n; idxTail += stride) {
+        float v = x[idxTail];
         localMax = v > localMax ? v : localMax;
     }
 
-    sdataF[tid] = localMax;
+    // Wavefront 内归约 (shuffle)
+    float warpVal = localMax;
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        float other = __shfl_down(warpVal, offset);
+        warpVal = warpVal > other ? warpVal : other;
+    }
+    int lane = tid & (warpSize - 1);
+    int numWarps = (blockDim.x + warpSize - 1) / warpSize;
+    int warpId = tid / warpSize;
+
+    if (lane == 0) {
+        sdataF[warpId] = warpVal;
+    }
     __syncthreads();
 
-    // 共享内存内树形归约
-    for (int offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
-        if (tid < offset) {
-            float other = sdataF[tid + offset];
-            sdataF[tid] = sdataF[tid] > other ? sdataF[tid] : other;
+    if (warpId == 0) {
+        float blockVal = -FLT_MAX;
+        if (lane < numWarps) {
+            blockVal = sdataF[lane];
         }
-        __syncthreads();
-    }
-
-    if (tid == 0) {
-        blockMax[blockIdx.x] = sdataF[0];
+        for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+            float other = __shfl_down(blockVal, offset);
+            blockVal = blockVal > other ? blockVal : other;
+        }
+        if (lane == 0) {
+            blockMax[blockIdx.x] = blockVal;
+        }
     }
 }
 
@@ -62,25 +109,67 @@ __global__ void reduceSumExpKernel(const float* __restrict__ x,
 
     float m = *mPtr;
     double localSum = 0.0;
-    for (; idx < n; idx += stride) {
-        float shifted = x[idx] - m;
+    // 向量化读取/写入 float4
+    const int numVec = n >> 2; // n/4
+    const float4* x4 = reinterpret_cast<const float4*>(x);
+    float4* y4 = reinterpret_cast<float4*>(y);
+    int idx4 = blockIdx.x * blockDim.x + tid;
+    int stride4 = stride;
+    for (; idx4 < numVec; idx4 += stride4) {
+        float4 v4 = x4[idx4];
+        float s0 = v4.x - m;
+        float s1 = v4.y - m;
+        float s2 = v4.z - m;
+        float s3 = v4.w - m;
+        double t0 = (double)expf(s0);
+        double t1 = (double)expf(s1);
+        double t2 = (double)expf(s2);
+        double t3 = (double)expf(s3);
+        float4 out4;
+        out4.x = (float)t0;
+        out4.y = (float)t1;
+        out4.z = (float)t2;
+        out4.w = (float)t3;
+        y4[idx4] = out4; // 缓存 t_i
+        localSum += (t0 + t1 + t2 + t3);
+    }
+    // 尾部处理
+    int base = numVec << 2;
+    int idxTail = base + idx;
+    for (; idxTail < n; idxTail += stride) {
+        float shifted = x[idxTail] - m;
         double t = (double)expf(shifted);
-        y[idx] = (float)t; // 缓存 t_i，避免后续重复计算 exp
+        y[idxTail] = (float)t;
         localSum += t;
     }
 
-    sdataD[tid] = localSum;
+    // Wavefront 内归约 (shuffle)
+    double warpSum = localSum;
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        double other = __shfl_down(warpSum, offset);
+        warpSum += other;
+    }
+    int lane = tid & (warpSize - 1);
+    int numWarps = (blockDim.x + warpSize - 1) / warpSize;
+    int warpId = tid / warpSize;
+
+    if (lane == 0) {
+        sdataD[warpId] = warpSum;
+    }
     __syncthreads();
 
-    for (int offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
-        if (tid < offset) {
-            sdataD[tid] += sdataD[tid + offset];
+    if (warpId == 0) {
+        double blockVal = 0.0;
+        if (lane < numWarps) {
+            blockVal = sdataD[lane];
         }
-        __syncthreads();
-    }
-
-    if (tid == 0) {
-        blockSums[blockIdx.x] = sdataD[0];
+        for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+            double other = __shfl_down(blockVal, offset);
+            blockVal += other;
+        }
+        if (lane == 0) {
+            blockSums[blockIdx.x] = blockVal;
+        }
     }
 }
 
@@ -90,8 +179,24 @@ __global__ void softmaxNormalizeKernel(float* __restrict__ y, int n, const doubl
 
     double sumExp = *sumExpPtr;
     float denom = (float)fmax(1e-12, sumExp);
-    for (; idx < n; idx += stride) {
-        y[idx] = y[idx] / denom;
+    // 向量化归一化
+    const int numVec = n >> 2; // n/4
+    float4* y4 = reinterpret_cast<float4*>(y);
+    int idx4 = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride4 = stride;
+    for (; idx4 < numVec; idx4 += stride4) {
+        float4 v4 = y4[idx4];
+        v4.x = v4.x / denom;
+        v4.y = v4.y / denom;
+        v4.z = v4.z / denom;
+        v4.w = v4.w / denom;
+        y4[idx4] = v4;
+    }
+    // 尾部处理
+    int base = numVec << 2;
+    int idxTail = base + idx;
+    for (; idxTail < n; idxTail += stride) {
+        y[idxTail] = y[idxTail] / denom;
     }
 }
 
@@ -106,19 +211,29 @@ __global__ void reduceFinalMaxKernel(const float* __restrict__ inVals, float* __
         localMax = v > localMax ? v : localMax;
     }
 
-    sdataF[tid] = localMax;
-    __syncthreads();
-
-    for (int offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
-        if (tid < offset) {
-            float other = sdataF[tid + offset];
-            sdataF[tid] = sdataF[tid] > other ? sdataF[tid] : other;
-        }
-        __syncthreads();
+    // Wavefront 内归约
+    float warpVal = localMax;
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        float other = __shfl_down(warpVal, offset);
+        warpVal = warpVal > other ? warpVal : other;
     }
-
-    if (tid == 0) {
-        *outVal = sdataF[0];
+    int lane = tid & (warpSize - 1);
+    int numWarps = (blockDim.x + warpSize - 1) / warpSize;
+    int warpId = tid / warpSize;
+    if (lane == 0) {
+        sdataF[warpId] = warpVal;
+    }
+    __syncthreads();
+    if (warpId == 0) {
+        float blockVal = -FLT_MAX;
+        if (lane < numWarps) blockVal = sdataF[lane];
+        for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+            float other = __shfl_down(blockVal, offset);
+            blockVal = blockVal > other ? blockVal : other;
+        }
+        if (lane == 0) {
+            *outVal = blockVal;
+        }
     }
 }
 
@@ -131,18 +246,29 @@ __global__ void reduceFinalSumKernel(const double* __restrict__ inVals, double* 
         localSum += inVals[i];
     }
 
-    sdataD[tid] = localSum;
-    __syncthreads();
-
-    for (int offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
-        if (tid < offset) {
-            sdataD[tid] += sdataD[tid + offset];
-        }
-        __syncthreads();
+    // Wavefront 内归约
+    double warpVal = localSum;
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        double other = __shfl_down(warpVal, offset);
+        warpVal += other;
     }
-
-    if (tid == 0) {
-        *outVal = sdataD[0];
+    int lane = tid & (warpSize - 1);
+    int numWarps = (blockDim.x + warpSize - 1) / warpSize;
+    int warpId = tid / warpSize;
+    if (lane == 0) {
+        sdataD[warpId] = warpVal;
+    }
+    __syncthreads();
+    if (warpId == 0) {
+        double blockVal = 0.0;
+        if (lane < numWarps) blockVal = sdataD[lane];
+        for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+            double other = __shfl_down(blockVal, offset);
+            blockVal += other;
+        }
+        if (lane == 0) {
+            *outVal = blockVal;
+        }
     }
 }
 
@@ -168,34 +294,39 @@ extern "C" void solve(const float* input, float* output, int N) {
 
     HIP_CHECK(hipMemcpy(d_x, input, sizeof(float) * (size_t)N, hipMemcpyHostToDevice));
 
-    // 1) 求全局最大值 m
-    float* d_blockMax = nullptr;
-    HIP_CHECK(hipMalloc(&d_blockMax, sizeof(float) * (size_t)blocks));
-    size_t smemMax = sizeof(float) * (size_t)threads;
-    reduceMaxKernel<<<blocks, threads, smemMax>>>(d_x, d_blockMax, N);
+    // O3: 融合到“两趟/两读一写”方案：
+    // Pass 1: 以在线法求 (m,l)，仅从 d_x 读取一次，不写中间 y
+    // Pass 2: 使用 (m,l) 直接从 d_x 计算输出写入 d_y（写一次）
+
+    // 为 Pass1 分配块级 (m,l) 缓冲
+    float* d_blockM = nullptr;
+    double* d_blockL = nullptr;
+    HIP_CHECK(hipMalloc(&d_blockM, sizeof(float) * (size_t)blocks));
+    HIP_CHECK(hipMalloc(&d_blockL, sizeof(double) * (size_t)blocks));
+
+    // 计算动态共享内存：每个 warp 存 1 个 (m,l)
+    int numWarpsHost = (threads + warpSize - 1) / warpSize;
+    size_t smemOnline = (sizeof(double) + sizeof(float)) * (size_t)numWarpsHost + 8; // 额外字节保证8字节对齐
+
+    // 声明/定义内核（见下方新内核定义）
+    extern __global__ void onlinePartialKernel(const float* __restrict__, float* __restrict__, double* __restrict__, int);
+    extern __global__ void onlineFinalReduceKernel(const float* __restrict__, const double* __restrict__, float* __restrict__, double* __restrict__, int);
+    extern __global__ void softmaxWriteKernel(const float* __restrict__, float* __restrict__, int, const float* __restrict__, const double* __restrict__);
+
+    // Pass1: 各块生成 (m_b, l_b)
+    onlinePartialKernel<<<blocks, threads, smemOnline>>>(d_x, d_blockM, d_blockL, N);
     HIP_CHECK(hipGetLastError());
 
-    // 设备端最终归约得到 m
+    // 设备端最终归约得到 (m, l)
     float* d_m = nullptr;
+    double* d_l = nullptr;
     HIP_CHECK(hipMalloc(&d_m, sizeof(float)));
-    reduceFinalMaxKernel<<<1, threads, smemMax>>>(d_blockMax, d_m, blocks);
+    HIP_CHECK(hipMalloc(&d_l, sizeof(double)));
+    onlineFinalReduceKernel<<<1, threads, smemOnline>>>(d_blockM, d_blockL, d_m, d_l, blocks);
     HIP_CHECK(hipGetLastError());
 
-    // 2) 计算 sum(exp(x - m))
-    double* d_blockSums = nullptr;
-    HIP_CHECK(hipMalloc(&d_blockSums, sizeof(double) * (size_t)blocks));
-    size_t smemSum = sizeof(double) * (size_t)threads;
-    reduceSumExpKernel<<<blocks, threads, smemSum>>>(d_x, d_y, d_blockSums, N, d_m);
-    HIP_CHECK(hipGetLastError());
-
-    // 设备端最终归约得到 sumExp
-    double* d_sumExp = nullptr;
-    HIP_CHECK(hipMalloc(&d_sumExp, sizeof(double)));
-    reduceFinalSumKernel<<<1, threads, smemSum>>>(d_blockSums, d_sumExp, blocks);
-    HIP_CHECK(hipGetLastError());
-
-    // 3) 归一化输出
-    softmaxNormalizeKernel<<<blocks, threads>>>(d_y, N, d_sumExp);
+    // Pass2: 直接写出 y = exp(x - m) / max(l, 1e-12)
+    softmaxWriteKernel<<<blocks, threads>>>(d_x, d_y, N, d_m, d_l);
     HIP_CHECK(hipGetLastError());
 
     HIP_CHECK(hipMemcpy(output, d_y, sizeof(float) * (size_t)N, hipMemcpyDeviceToHost));
@@ -203,10 +334,176 @@ extern "C" void solve(const float* input, float* output, int N) {
     // 清理资源
     HIP_CHECK(hipFree(d_x));
     HIP_CHECK(hipFree(d_y));
-    HIP_CHECK(hipFree(d_blockMax));
-    HIP_CHECK(hipFree(d_blockSums));
+    HIP_CHECK(hipFree(d_blockM));
+    HIP_CHECK(hipFree(d_blockL));
     HIP_CHECK(hipFree(d_m));
-    HIP_CHECK(hipFree(d_sumExp));
+    HIP_CHECK(hipFree(d_l));
     HIP_CHECK(hipHostUnregister((void*)input));
     HIP_CHECK(hipHostUnregister((void*)output));
+}
+
+// --- 新增：基于在线法的 (m,l) 分块计算 ---
+__global__ __launch_bounds__(TPB) void onlinePartialKernel(const float* __restrict__ x,
+                                    float* __restrict__ blockM,
+                                    double* __restrict__ blockL,
+                                    int n) {
+    const int tid = threadIdx.x;
+    const int stride = blockDim.x * gridDim.x;
+
+    float m_local = -FLT_MAX;
+    double l_local = 0.0;
+
+    // 向量化遍历
+    int numVec = n >> 2;
+    const float4* x4 = reinterpret_cast<const float4*>(x);
+    int idx4 = blockIdx.x * blockDim.x + tid;
+    int stride4 = stride;
+    for (; idx4 < numVec; idx4 += stride4) {
+        float4 v4 = x4[idx4];
+        // 依次合并四个元素
+        combineRunningStats(m_local, l_local, v4.x, 1.0);
+        combineRunningStats(m_local, l_local, v4.y, 1.0);
+        combineRunningStats(m_local, l_local, v4.z, 1.0);
+        combineRunningStats(m_local, l_local, v4.w, 1.0);
+    }
+    // 尾部
+    int base = numVec << 2;
+    int idx = base + blockIdx.x * blockDim.x + tid;
+    for (; idx < n; idx += stride) {
+        float vx = x[idx];
+        combineRunningStats(m_local, l_local, vx, 1.0);
+    }
+
+    // 以两级归约方式合并到块级 (m,l)
+    extern __shared__ unsigned char smemRaw[];
+    int numWarps = (blockDim.x + warpSize - 1) / warpSize;
+    uintptr_t basePtr = reinterpret_cast<uintptr_t>(smemRaw);
+    uintptr_t alignedPtr = (basePtr + 7u) & ~static_cast<uintptr_t>(7u);
+    double* sL = reinterpret_cast<double*>(alignedPtr);
+    float* sM = reinterpret_cast<float*>(sL + numWarps);
+
+    // Warp 内归约
+    float m_w = m_local;
+    double l_w = l_local;
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        float m_o = __shfl_down(m_w, offset);
+        double l_o = __shfl_down(l_w, offset);
+        combineRunningStats(m_w, l_w, m_o, l_o);
+    }
+    int lane = tid & (warpSize - 1);
+    int warpId = tid / warpSize;
+    if (lane == 0) {
+        sM[warpId] = m_w;
+        sL[warpId] = l_w;
+    }
+    __syncthreads();
+
+    // Warp 间归约（由第一个 warp 完成）
+    if (warpId == 0) {
+        float m_acc = -FLT_MAX;
+        double l_acc = 0.0;
+        if (lane < numWarps) {
+            m_acc = sM[lane];
+            l_acc = sL[lane];
+        }
+        for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+            float m_o = __shfl_down(m_acc, offset);
+            double l_o = __shfl_down(l_acc, offset);
+            combineRunningStats(m_acc, l_acc, m_o, l_o);
+        }
+        if (lane == 0) {
+            blockM[blockIdx.x] = m_acc;
+            blockL[blockIdx.x] = l_acc;
+        }
+    }
+}
+
+// --- 新增：最终归约得到 (m, l) ---
+__global__ __launch_bounds__(TPB) void onlineFinalReduceKernel(const float* __restrict__ inM,
+                                        const double* __restrict__ inL,
+                                        float* __restrict__ outM,
+                                        double* __restrict__ outL,
+                                        int len) {
+    const int tid = threadIdx.x;
+
+    // 线程私有累积
+    float m_local = -FLT_MAX;
+    double l_local = 0.0;
+    for (int i = tid; i < len; i += blockDim.x) {
+        float m_i = inM[i];
+        double l_i = inL[i];
+        combineRunningStats(m_local, l_local, m_i, l_i);
+    }
+
+    // 两级归约
+    extern __shared__ unsigned char smemRaw[];
+    int numWarps = (blockDim.x + warpSize - 1) / warpSize;
+    uintptr_t basePtr = reinterpret_cast<uintptr_t>(smemRaw);
+    uintptr_t alignedPtr = (basePtr + 7u) & ~static_cast<uintptr_t>(7u);
+    double* sL = reinterpret_cast<double*>(alignedPtr);
+    float* sM = reinterpret_cast<float*>(sL + numWarps);
+
+    float m_w = m_local;
+    double l_w = l_local;
+    for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        float m_o = __shfl_down(m_w, offset);
+        double l_o = __shfl_down(l_w, offset);
+        combineRunningStats(m_w, l_w, m_o, l_o);
+    }
+    int lane = tid & (warpSize - 1);
+    int warpId = tid / warpSize;
+    if (lane == 0) {
+        sM[warpId] = m_w;
+        sL[warpId] = l_w;
+    }
+    __syncthreads();
+    if (warpId == 0) {
+        float m_acc = -FLT_MAX;
+        double l_acc = 0.0;
+        if (lane < numWarps) {
+            m_acc = sM[lane];
+            l_acc = sL[lane];
+        }
+        for (int offset = warpSize >> 1; offset > 0; offset >>= 1) {
+            float m_o = __shfl_down(m_acc, offset);
+            double l_o = __shfl_down(l_acc, offset);
+            combineRunningStats(m_acc, l_acc, m_o, l_o);
+        }
+        if (lane == 0) {
+            *outM = m_acc;
+            *outL = l_acc;
+        }
+    }
+}
+
+// --- 新增：直接写出 y ---
+__global__ __launch_bounds__(TPB) void softmaxWriteKernel(const float* __restrict__ x,
+                                   float* __restrict__ y,
+                                   int n,
+                                   const float* __restrict__ mPtr,
+                                   const double* __restrict__ lPtr) {
+    const int stride = blockDim.x * gridDim.x;
+    float m = *mPtr;
+    double l = *lPtr;
+    float denom = (float)fmax(1e-12, l);
+
+    // 向量化归一化写出
+    int numVec = n >> 2;
+    const float4* x4 = reinterpret_cast<const float4*>(x);
+    float4* y4 = reinterpret_cast<float4*>(y);
+    int idx4 = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride4 = stride;
+    for (; idx4 < numVec; idx4 += stride4) {
+        float4 v4 = x4[idx4];
+        v4.x = expf(v4.x - m) / denom;
+        v4.y = expf(v4.y - m) / denom;
+        v4.z = expf(v4.z - m) / denom;
+        v4.w = expf(v4.w - m) / denom;
+        y4[idx4] = v4;
+    }
+    int base = numVec << 2;
+    int idx = base + blockIdx.x * blockDim.x + threadIdx.x;
+    for (; idx < n; idx += stride) {
+        y[idx] = expf(x[idx] - m) / denom;
+    }
 }

@@ -19,5 +19,6 @@ hip_programming_contest/softmax/softmax
 **/.previous_versions/
 **/my_outputs/
 *student.out
+**/results.*
 
 *.log
