@@ -60,3 +60,12 @@ Softmax 优化路线图与诊断步骤
 - 结论：
   - 端到端时间显著改善（更好的内核效率与调度）；仍然受 H2D/D2H 主导。
   - 下一步进入 O3：融合为单趟在线 Softmax，目标将 HBM 访问降至 1 读 1 写。
+
+八、阶段成果（O3 两读一写在线法融合）
+- 正确性：output_737.log/764.log/766.log 均 10/10 PASS，Total execution time ~6.06→6.02s，较 O2 略有改善。
+- Profiling（单用例，results.*）：
+  - Kernel 端耗时（results.stats.csv）：onlinePartial ~26.4µs、onlineFinalReduce ~21.76µs、softmaxWrite ~4.32µs，总计 ~52.5µs（两核合并为三核，调度负担下降）。
+  - HIP API（results.hip_stats.csv）：hipMemcpy ~99.18%，hipLaunchKernel ~0.35%。
+- 结论：
+  - 通过去除中间 t_i 写回，减少 HBM 往返，端到端时间进一步下降；仍受 H2D/D2H 主导。
+  - 下一步优先做 O5（占用率/launch bounds）与 O4（LDS 银行冲突确认/处理），在保持两读一写的同时榨取核内性能。

@@ -19,574 +19,446 @@
 ,{"args":{"name":"GPU Barriers7"},"ph":"M","pid":525,"name":"process_name","sort_index":17}
 ,{"args":{"name":"GPU8"},"ph":"M","pid":14,"name":"process_name","sort_index":18}
 ,{"args":{"name":"GPU Barriers8"},"ph":"M","pid":526,"name":"process_name","sort_index":19}
-,{"ph":"X","name":"CopyDeviceToDevice","pid":1,"tid":0,"ts":"505162629940","dur":"8",
+,{"ph":"X","name":"CopyDeviceToDevice","pid":1,"tid":0,"ts":"506201251869","dur":"8",
   "args":{
-    "BeginNs":"505162629940859",
-    "EndNs":"505162629948859",
+    "BeginNs":"506201251869424",
+    "EndNs":"506201251877584",
     "dev-id":"8",
     "queue-id":"0",
     "Name":"CopyDeviceToDevice",
-    "pid":"917221",
-    "tid":"917221",
+    "pid":"1136109",
+    "tid":"1136109",
     "stream-id":"0",
     "Data":"",
-    "DurationNs":"8000"
+    "DurationNs":"8160"
   }
 }
-,{"ph":"X","name":"CopyDeviceToDevice","pid":1,"tid":0,"ts":"505162630842","dur":"7",
+,{"ph":"X","name":"CopyDeviceToDevice","pid":1,"tid":0,"ts":"506201253170","dur":"6",
   "args":{
-    "BeginNs":"505162630842781",
-    "EndNs":"505162630849821",
+    "BeginNs":"506201253170547",
+    "EndNs":"506201253177107",
     "dev-id":"8",
     "queue-id":"0",
     "Name":"CopyDeviceToDevice",
-    "pid":"917221",
-    "tid":"917221",
+    "pid":"1136109",
+    "tid":"1136109",
     "stream-id":"0",
     "Data":"",
-    "DurationNs":"7040"
+    "DurationNs":"6560"
   }
 }
-,{"ph":"X","name":"hipMalloc","pid":2,"tid":917221,"ts":"505162300018","dur":"55",
+,{"ph":"X","name":"hipMalloc","pid":2,"tid":1136109,"ts":"506200915768","dur":"53",
   "args":{
-    "BeginNs":"505162300018923",
-    "EndNs":"505162300074272",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506200915768246",
+    "EndNs":"506200915822225",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipMalloc",
-    "args":"( ptr(0x7f0010200000) size(4))",
+    "args":"( ptr(0x7f54a4400000) size(4))",
     "Data":"",
-    "DurationNs":"55349"
+    "DurationNs":"53979"
   }
 }
-,{"ph":"X","name":"hipMalloc","pid":2,"tid":917221,"ts":"505162300082","dur":"3",
+,{"ph":"X","name":"hipMalloc","pid":2,"tid":1136109,"ts":"506200915833","dur":"3",
   "args":{
-    "BeginNs":"505162300082132",
-    "EndNs":"505162300085532",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506200915833635",
+    "EndNs":"506200915837235",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipMalloc",
-    "args":"( ptr(0x7f0010201000) size(4))",
+    "args":"( ptr(0x7f54a4401000) size(4))",
     "Data":"",
-    "DurationNs":"3400"
+    "DurationNs":"3600"
   }
 }
-,{"ph":"X","name":"hipHostRegister","pid":2,"tid":917221,"ts":"505162300088","dur":"1295",
+,{"ph":"X","name":"hipHostRegister","pid":2,"tid":1136109,"ts":"506200915840","dur":"1315",
   "args":{
-    "BeginNs":"505162300088892",
-    "EndNs":"505162301384678",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506200915840285",
+    "EndNs":"506200917156061",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipHostRegister",
-    "args":"( hostPtr(0x28647ab0) sizeBytes(4) flags(0))",
+    "args":"( hostPtr(0x3e87bc60) sizeBytes(4) flags(0))",
     "Data":"",
-    "DurationNs":"1295786"
+    "DurationNs":"1315776"
   }
 }
-,{"ph":"X","name":"hipHostRegister","pid":2,"tid":917221,"ts":"505162301387","dur":"95",
+,{"ph":"X","name":"hipHostRegister","pid":2,"tid":1136109,"ts":"506200917160","dur":"96",
   "args":{
-    "BeginNs":"505162301387958",
-    "EndNs":"505162301483607",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506200917160150",
+    "EndNs":"506200917256489",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipHostRegister",
-    "args":"( hostPtr(0x28647ad0) sizeBytes(4) flags(0))",
+    "args":"( hostPtr(0x3e87bc80) sizeBytes(4) flags(0))",
     "Data":"",
-    "DurationNs":"95649"
+    "DurationNs":"96339"
   }
 }
-,{"ph":"X","name":"hipMemcpy","pid":2,"tid":917221,"ts":"505162301487","dur":"328470",
+,{"ph":"X","name":"hipMemcpy","pid":2,"tid":1136109,"ts":"506200917260","dur":"334625",
   "args":{
-    "BeginNs":"505162301487497",
-    "EndNs":"505162629957531",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506200917260769",
+    "EndNs":"506201251886715",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipMemcpy",
-    "args":"( dst(0x7f0010200000) src(0x28647ab0) sizeBytes(4) kind(1))",
+    "args":"( dst(0x7f54a4400000) src(0x3e87bc60) sizeBytes(4) kind(1))",
     "Data":"",
-    "DurationNs":"328470034"
+    "DurationNs":"334625946"
   }
 }
-,{"ph":"X","name":"hipMalloc","pid":2,"tid":917221,"ts":"505162629963","dur":"7",
+,{"ph":"X","name":"hipMalloc","pid":2,"tid":1136109,"ts":"506201251896","dur":"12",
   "args":{
-    "BeginNs":"505162629963751",
-    "EndNs":"505162629971260",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201251896945",
+    "EndNs":"506201251909045",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipMalloc",
-    "args":"( ptr(0x7f0010202000) size(4))",
+    "args":"( ptr(0x7f54a4402000) size(4))",
     "Data":"",
-    "DurationNs":"7509"
+    "DurationNs":"12100"
   }
 }
-,{"ph":"X","name":"__hipPushCallConfiguration","pid":2,"tid":917221,"ts":"505162629976","dur":"1",
+,{"ph":"X","name":"hipMalloc","pid":2,"tid":1136109,"ts":"506201251911","dur":"1",
   "args":{
-    "BeginNs":"505162629976520",
-    "EndNs":"505162629977550",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201251911985",
+    "EndNs":"506201251913805",
+    "pid":"1136109",
+    "tid":"1136109",
+    "Name":"hipMalloc",
+    "args":"( ptr(0x7f54a4403000) size(8))",
+    "Data":"",
+    "DurationNs":"1820"
+  }
+}
+,{"ph":"X","name":"__hipPushCallConfiguration","pid":2,"tid":1136109,"ts":"506201251919","dur":"1",
+  "args":{
+    "BeginNs":"506201251919355",
+    "EndNs":"506201251920065",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"__hipPushCallConfiguration",
-    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(1024) stream(1))",
+    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(48) stream(1))",
     "Data":"",
-    "DurationNs":"1030"
+    "DurationNs":"710"
   }
 }
-,{"ph":"X","name":"__hipPopCallConfiguration","pid":2,"tid":917221,"ts":"505162629979","dur":"1",
+,{"ph":"X","name":"__hipPopCallConfiguration","pid":2,"tid":1136109,"ts":"506201251922","dur":"1",
   "args":{
-    "BeginNs":"505162629979210",
-    "EndNs":"505162629979680",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201251922755",
+    "EndNs":"506201251923195",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"__hipPopCallConfiguration",
-    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(1024) stream(1))",
+    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(48) stream(1))",
     "Data":"",
-    "DurationNs":"470"
+    "DurationNs":"440"
   }
 }
-,{"ph":"X","name":"hipLaunchKernel","pid":2,"tid":917221,"ts":"505162629986","dur":"787",
+,{"ph":"X","name":"hipLaunchKernel","pid":2,"tid":1136109,"ts":"506201251927","dur":"1177",
   "args":{
-    "BeginNs":"505162629986850",
-    "EndNs":"505162630773922",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201251927915",
+    "EndNs":"506201253105172",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipLaunchKernel",
-    "args":"( kernel(reduceMaxKernel(float const*, float*, int)) function_address(0x2015e8) numBlocks({z(1) y(1) x(1}) dimBlocks({z(1) y(1) x(256}) args(0x7ffd29424ae8) sharedMemBytes(1024) stream(1))",
+    "args":"( kernel(onlinePartialKernel) function_address(0x201648) numBlocks({z(1) y(1) x(1}) dimBlocks({z(1) y(1) x(256}) args(0x7ffd3d081270) sharedMemBytes(48) stream(1))",
     "Data":"",
-    "DurationNs":"787072"
+    "DurationNs":"1177257"
   }
 }
-,{"ph":"X","name":"hipGetLastError","pid":2,"tid":917221,"ts":"505162630792","dur":"1",
+,{"ph":"X","name":"hipGetLastError","pid":2,"tid":1136109,"ts":"506201253123","dur":"1",
   "args":{
-    "BeginNs":"505162630792522",
-    "EndNs":"505162630792712",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253123952",
+    "EndNs":"506201253124142",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipGetLastError",
     "args":"( ))",
     "Data":"",
     "DurationNs":"190"
   }
 }
-,{"ph":"X","name":"hipMalloc","pid":2,"tid":917221,"ts":"505162630793","dur":"3",
+,{"ph":"X","name":"hipMalloc","pid":2,"tid":1136109,"ts":"506201253127","dur":"3",
   "args":{
-    "BeginNs":"505162630793382",
-    "EndNs":"505162630796762",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253127162",
+    "EndNs":"506201253130791",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipMalloc",
-    "args":"( ptr(0x7f0010203000) size(4))",
+    "args":"( ptr(0x7f54a4404000) size(4))",
     "Data":"",
-    "DurationNs":"3380"
+    "DurationNs":"3629"
   }
 }
-,{"ph":"X","name":"__hipPushCallConfiguration","pid":2,"tid":917221,"ts":"505162630799","dur":"1",
+,{"ph":"X","name":"hipMalloc","pid":2,"tid":1136109,"ts":"506201253131","dur":"1",
   "args":{
-    "BeginNs":"505162630799482",
-    "EndNs":"505162630799742",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253131171",
+    "EndNs":"506201253132571",
+    "pid":"1136109",
+    "tid":"1136109",
+    "Name":"hipMalloc",
+    "args":"( ptr(0x7f54a4405000) size(8))",
+    "Data":"",
+    "DurationNs":"1400"
+  }
+}
+,{"ph":"X","name":"__hipPushCallConfiguration","pid":2,"tid":1136109,"ts":"506201253135","dur":"1",
+  "args":{
+    "BeginNs":"506201253135011",
+    "EndNs":"506201253135262",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"__hipPushCallConfiguration",
-    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(1024) stream(1))",
+    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(48) stream(1))",
     "Data":"",
-    "DurationNs":"260"
+    "DurationNs":"251"
   }
 }
-,{"ph":"X","name":"__hipPopCallConfiguration","pid":2,"tid":917221,"ts":"505162630800","dur":"1",
+,{"ph":"X","name":"__hipPopCallConfiguration","pid":2,"tid":1136109,"ts":"506201253135","dur":"1",
   "args":{
-    "BeginNs":"505162630800251",
-    "EndNs":"505162630800551",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253135722",
+    "EndNs":"506201253136022",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"__hipPopCallConfiguration",
-    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(1024) stream(1))",
+    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(48) stream(1))",
     "Data":"",
     "DurationNs":"300"
   }
 }
-,{"ph":"X","name":"hipLaunchKernel","pid":2,"tid":917221,"ts":"505162630802","dur":"4",
+,{"ph":"X","name":"hipLaunchKernel","pid":2,"tid":1136109,"ts":"506201253136","dur":"3",
   "args":{
-    "BeginNs":"505162630802822",
-    "EndNs":"505162630806951",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253136462",
+    "EndNs":"506201253140422",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipLaunchKernel",
-    "args":"( kernel(reduceFinalMaxKernel(float const*, float*, int)) function_address(0x201600) numBlocks({z(1) y(1) x(1}) dimBlocks({z(1) y(1) x(256}) args(0x7ffd29424ae8) sharedMemBytes(1024) stream(1))",
+    "args":"( kernel(onlineFinalReduceKernel) function_address(0x201650) numBlocks({z(1) y(1) x(1}) dimBlocks({z(1) y(1) x(256}) args(0x7ffd3d081270) sharedMemBytes(48) stream(1))",
     "Data":"",
-    "DurationNs":"4129"
+    "DurationNs":"3960"
   }
 }
-,{"ph":"X","name":"hipGetLastError","pid":2,"tid":917221,"ts":"505162630807","dur":"1",
+,{"ph":"X","name":"hipGetLastError","pid":2,"tid":1136109,"ts":"506201253142","dur":"1",
   "args":{
-    "BeginNs":"505162630807522",
-    "EndNs":"505162630807611",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253142191",
+    "EndNs":"506201253142291",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipGetLastError",
     "args":"( ))",
     "Data":"",
-    "DurationNs":"89"
+    "DurationNs":"100"
   }
 }
-,{"ph":"X","name":"hipMalloc","pid":2,"tid":917221,"ts":"505162630807","dur":"1",
+,{"ph":"X","name":"__hipPushCallConfiguration","pid":2,"tid":1136109,"ts":"506201253142","dur":"1",
   "args":{
-    "BeginNs":"505162630807971",
-    "EndNs":"505162630809722",
-    "pid":"917221",
-    "tid":"917221",
-    "Name":"hipMalloc",
-    "args":"( ptr(0x7f0010204000) size(8))",
-    "Data":"",
-    "DurationNs":"1751"
-  }
-}
-,{"ph":"X","name":"__hipPushCallConfiguration","pid":2,"tid":917221,"ts":"505162630811","dur":"1",
-  "args":{
-    "BeginNs":"505162630811182",
-    "EndNs":"505162630811351",
-    "pid":"917221",
-    "tid":"917221",
-    "Name":"__hipPushCallConfiguration",
-    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(2048) stream(1))",
-    "Data":"",
-    "DurationNs":"169"
-  }
-}
-,{"ph":"X","name":"__hipPopCallConfiguration","pid":2,"tid":917221,"ts":"505162630811","dur":"1",
-  "args":{
-    "BeginNs":"505162630811982",
-    "EndNs":"505162630812151",
-    "pid":"917221",
-    "tid":"917221",
-    "Name":"__hipPopCallConfiguration",
-    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(2048) stream(1))",
-    "Data":"",
-    "DurationNs":"169"
-  }
-}
-,{"ph":"X","name":"hipLaunchKernel","pid":2,"tid":917221,"ts":"505162630812","dur":"3",
-  "args":{
-    "BeginNs":"505162630812451",
-    "EndNs":"505162630815771",
-    "pid":"917221",
-    "tid":"917221",
-    "Name":"hipLaunchKernel",
-    "args":"( kernel(reduceSumExpKernel(float const*, float*, double*, int, float const*)) function_address(0x2015f0) numBlocks({z(1) y(1) x(1}) dimBlocks({z(1) y(1) x(256}) args(0x7ffd29424ae8) sharedMemBytes(2048) stream(1))",
-    "Data":"",
-    "DurationNs":"3320"
-  }
-}
-,{"ph":"X","name":"hipGetLastError","pid":2,"tid":917221,"ts":"505162630817","dur":"1",
-  "args":{
-    "BeginNs":"505162630817221",
-    "EndNs":"505162630817311",
-    "pid":"917221",
-    "tid":"917221",
-    "Name":"hipGetLastError",
-    "args":"( ))",
-    "Data":"",
-    "DurationNs":"90"
-  }
-}
-,{"ph":"X","name":"hipMalloc","pid":2,"tid":917221,"ts":"505162630817","dur":"1",
-  "args":{
-    "BeginNs":"505162630817621",
-    "EndNs":"505162630819221",
-    "pid":"917221",
-    "tid":"917221",
-    "Name":"hipMalloc",
-    "args":"( ptr(0x7f0010205000) size(8))",
-    "Data":"",
-    "DurationNs":"1600"
-  }
-}
-,{"ph":"X","name":"__hipPushCallConfiguration","pid":2,"tid":917221,"ts":"505162630820","dur":"1",
-  "args":{
-    "BeginNs":"505162630820511",
-    "EndNs":"505162630820671",
-    "pid":"917221",
-    "tid":"917221",
-    "Name":"__hipPushCallConfiguration",
-    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(2048) stream(1))",
-    "Data":"",
-    "DurationNs":"160"
-  }
-}
-,{"ph":"X","name":"__hipPopCallConfiguration","pid":2,"tid":917221,"ts":"505162630821","dur":"1",
-  "args":{
-    "BeginNs":"505162630821001",
-    "EndNs":"505162630821161",
-    "pid":"917221",
-    "tid":"917221",
-    "Name":"__hipPopCallConfiguration",
-    "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(2048) stream(1))",
-    "Data":"",
-    "DurationNs":"160"
-  }
-}
-,{"ph":"X","name":"hipLaunchKernel","pid":2,"tid":917221,"ts":"505162630821","dur":"3",
-  "args":{
-    "BeginNs":"505162630821471",
-    "EndNs":"505162630824641",
-    "pid":"917221",
-    "tid":"917221",
-    "Name":"hipLaunchKernel",
-    "args":"( kernel(reduceFinalSumKernel(double const*, double*, int)) function_address(0x201608) numBlocks({z(1) y(1) x(1}) dimBlocks({z(1) y(1) x(256}) args(0x7ffd29424ae8) sharedMemBytes(2048) stream(1))",
-    "Data":"",
-    "DurationNs":"3170"
-  }
-}
-,{"ph":"X","name":"hipGetLastError","pid":2,"tid":917221,"ts":"505162630826","dur":"1",
-  "args":{
-    "BeginNs":"505162630826131",
-    "EndNs":"505162630826221",
-    "pid":"917221",
-    "tid":"917221",
-    "Name":"hipGetLastError",
-    "args":"( ))",
-    "Data":"",
-    "DurationNs":"90"
-  }
-}
-,{"ph":"X","name":"__hipPushCallConfiguration","pid":2,"tid":917221,"ts":"505162630826","dur":"1",
-  "args":{
-    "BeginNs":"505162630826551",
-    "EndNs":"505162630826711",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253142662",
+    "EndNs":"506201253142811",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"__hipPushCallConfiguration",
     "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(0) stream(1))",
     "Data":"",
-    "DurationNs":"160"
+    "DurationNs":"149"
   }
 }
-,{"ph":"X","name":"__hipPopCallConfiguration","pid":2,"tid":917221,"ts":"505162630827","dur":"1",
+,{"ph":"X","name":"__hipPopCallConfiguration","pid":2,"tid":1136109,"ts":"506201253143","dur":"1",
   "args":{
-    "BeginNs":"505162630827921",
-    "EndNs":"505162630828081",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253143111",
+    "EndNs":"506201253143282",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"__hipPopCallConfiguration",
     "args":"( gridDim({z(1) y(1) x(1}) blockDim({z(1) y(1) x(256}) sharedMem(0) stream(1))",
     "Data":"",
-    "DurationNs":"160"
+    "DurationNs":"171"
   }
 }
-,{"ph":"X","name":"hipLaunchKernel","pid":2,"tid":917221,"ts":"505162630828","dur":"2",
+,{"ph":"X","name":"hipLaunchKernel","pid":2,"tid":1136109,"ts":"506201253144","dur":"3",
   "args":{
-    "BeginNs":"505162630828391",
-    "EndNs":"505162630831331",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253144531",
+    "EndNs":"506201253147611",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipLaunchKernel",
-    "args":"( kernel(softmaxNormalizeKernel(float*, int, double const*)) function_address(0x2015f8) numBlocks({z(1) y(1) x(1}) dimBlocks({z(1) y(1) x(256}) args(0x7ffd29424ae8) sharedMemBytes(0) stream(1))",
+    "args":"( kernel(softmaxWriteKernel) function_address(0x201658) numBlocks({z(1) y(1) x(1}) dimBlocks({z(1) y(1) x(256}) args(0x7ffd3d081270) sharedMemBytes(0) stream(1))",
     "Data":"",
-    "DurationNs":"2940"
+    "DurationNs":"3080"
   }
 }
-,{"ph":"X","name":"hipGetLastError","pid":2,"tid":917221,"ts":"505162630831","dur":"1",
+,{"ph":"X","name":"hipGetLastError","pid":2,"tid":1136109,"ts":"506201253148","dur":"1",
   "args":{
-    "BeginNs":"505162630831871",
-    "EndNs":"505162630831961",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253148191",
+    "EndNs":"506201253148282",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipGetLastError",
     "args":"( ))",
     "Data":"",
-    "DurationNs":"90"
+    "DurationNs":"91"
   }
 }
-,{"ph":"X","name":"hipMemcpy","pid":2,"tid":917221,"ts":"505162630834","dur":"21",
+,{"ph":"X","name":"hipMemcpy","pid":2,"tid":1136109,"ts":"506201253150","dur":"34",
   "args":{
-    "BeginNs":"505162630834871",
-    "EndNs":"505162630855931",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253150042",
+    "EndNs":"506201253184101",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipMemcpy",
-    "args":"( dst(0x28647ad0) src(0x7f0010201000) sizeBytes(4) kind(2))",
+    "args":"( dst(0x3e87bc80) src(0x7f54a4401000) sizeBytes(4) kind(2))",
     "Data":"",
-    "DurationNs":"21060"
+    "DurationNs":"34059"
   }
 }
-,{"ph":"X","name":"hipFree","pid":2,"tid":917221,"ts":"505162630857","dur":"70",
+,{"ph":"X","name":"hipFree","pid":2,"tid":1136109,"ts":"506201253188","dur":"60",
   "args":{
-    "BeginNs":"505162630857481",
-    "EndNs":"505162630928420",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253188411",
+    "EndNs":"506201253249180",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipFree",
-    "args":"( ptr(0x7f0010200000))",
+    "args":"( ptr(0x7f54a4400000))",
     "Data":"",
-    "DurationNs":"70939"
+    "DurationNs":"60769"
   }
 }
-,{"ph":"X","name":"hipFree","pid":2,"tid":917221,"ts":"505162630930","dur":"2",
+,{"ph":"X","name":"hipFree","pid":2,"tid":1136109,"ts":"506201253249","dur":"1",
   "args":{
-    "BeginNs":"505162630930730",
-    "EndNs":"505162630932840",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253249890",
+    "EndNs":"506201253251710",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipFree",
-    "args":"( ptr(0x7f0010201000))",
+    "args":"( ptr(0x7f54a4401000))",
     "Data":"",
-    "DurationNs":"2110"
+    "DurationNs":"1820"
   }
 }
-,{"ph":"X","name":"hipFree","pid":2,"tid":917221,"ts":"505162630933","dur":"1",
+,{"ph":"X","name":"hipFree","pid":2,"tid":1136109,"ts":"506201253253","dur":"1",
   "args":{
-    "BeginNs":"505162630933160",
-    "EndNs":"505162630934730",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253253640",
+    "EndNs":"506201253255500",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipFree",
-    "args":"( ptr(0x7f0010202000))",
+    "args":"( ptr(0x7f54a4402000))",
     "Data":"",
-    "DurationNs":"1570"
+    "DurationNs":"1860"
   }
 }
-,{"ph":"X","name":"hipFree","pid":2,"tid":917221,"ts":"505162630935","dur":"1",
+,{"ph":"X","name":"hipFree","pid":2,"tid":1136109,"ts":"506201253255","dur":"1",
   "args":{
-    "BeginNs":"505162630935030",
-    "EndNs":"505162630936750",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253255890",
+    "EndNs":"506201253257420",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipFree",
-    "args":"( ptr(0x7f0010204000))",
+    "args":"( ptr(0x7f54a4403000))",
     "Data":"",
-    "DurationNs":"1720"
+    "DurationNs":"1530"
   }
 }
-,{"ph":"X","name":"hipFree","pid":2,"tid":917221,"ts":"505162630938","dur":"1",
+,{"ph":"X","name":"hipFree","pid":2,"tid":1136109,"ts":"506201253258","dur":"1",
   "args":{
-    "BeginNs":"505162630938060",
-    "EndNs":"505162630939930",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253258820",
+    "EndNs":"506201253260500",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipFree",
-    "args":"( ptr(0x7f0010203000))",
+    "args":"( ptr(0x7f54a4404000))",
     "Data":"",
-    "DurationNs":"1870"
+    "DurationNs":"1680"
   }
 }
-,{"ph":"X","name":"hipFree","pid":2,"tid":917221,"ts":"505162630940","dur":"2",
+,{"ph":"X","name":"hipFree","pid":2,"tid":1136109,"ts":"506201253260","dur":"1",
   "args":{
-    "BeginNs":"505162630940240",
-    "EndNs":"505162630942580",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253260800",
+    "EndNs":"506201253262740",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipFree",
-    "args":"( ptr(0x7f0010205000))",
+    "args":"( ptr(0x7f54a4405000))",
     "Data":"",
-    "DurationNs":"2340"
+    "DurationNs":"1940"
   }
 }
-,{"ph":"X","name":"hipHostUnregister","pid":2,"tid":917221,"ts":"505162630943","dur":"6",
+,{"ph":"X","name":"hipHostUnregister","pid":2,"tid":1136109,"ts":"506201253264","dur":"6",
   "args":{
-    "BeginNs":"505162630943890",
-    "EndNs":"505162630950110",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253264070",
+    "EndNs":"506201253270850",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipHostUnregister",
-    "args":"( hostPtr(0x28647ab0))",
+    "args":"( hostPtr(0x3e87bc60))",
     "Data":"",
-    "DurationNs":"6220"
+    "DurationNs":"6780"
   }
 }
-,{"ph":"X","name":"hipHostUnregister","pid":2,"tid":917221,"ts":"505162630951","dur":"2",
+,{"ph":"X","name":"hipHostUnregister","pid":2,"tid":1136109,"ts":"506201253272","dur":"2",
   "args":{
-    "BeginNs":"505162630951330",
-    "EndNs":"505162630953490",
-    "pid":"917221",
-    "tid":"917221",
+    "BeginNs":"506201253272350",
+    "EndNs":"506201253274450",
+    "pid":"1136109",
+    "tid":"1136109",
     "Name":"hipHostUnregister",
-    "args":"( hostPtr(0x28647ad0))",
+    "args":"( hostPtr(0x3e87bc80))",
     "Data":"",
-    "DurationNs":"2160"
+    "DurationNs":"2100"
   }
 }
-,{"ph":"X","name":"reduceMaxKernel(float const*, float*, int)","pid":14,"tid":1,"ts":"505162630781","dur":"5",
+,{"ph":"X","name":"onlinePartialKernel","pid":14,"tid":1,"ts":"506201253112","dur":"26",
   "args":{
-    "BeginNs":"505162630781501",
-    "EndNs":"505162630787101",
+    "BeginNs":"506201253112627",
+    "EndNs":"506201253139027",
     "dev-id":"8",
     "queue-id":"0",
-    "Name":"reduceMaxKernel(float const*, float*, int)",
-    "pid":"917221",
-    "tid":"917221",
+    "Name":"onlinePartialKernel",
+    "pid":"1136109",
+    "tid":"1136109",
     "stream-id":"1",
     "Data":"",
-    "DurationNs":"5600"
+    "DurationNs":"26400"
   }
 }
-,{"ph":"X","name":"reduceFinalMaxKernel(float const*, float*, int)","pid":14,"tid":1,"ts":"505162630813","dur":"6",
+,{"ph":"X","name":"onlineFinalReduceKernel","pid":14,"tid":1,"ts":"506201253144","dur":"21",
   "args":{
-    "BeginNs":"505162630813661",
-    "EndNs":"505162630819901",
+    "BeginNs":"506201253144467",
+    "EndNs":"506201253166227",
     "dev-id":"8",
     "queue-id":"0",
-    "Name":"reduceFinalMaxKernel(float const*, float*, int)",
-    "pid":"917221",
-    "tid":"917221",
+    "Name":"onlineFinalReduceKernel",
+    "pid":"1136109",
+    "tid":"1136109",
     "stream-id":"1",
     "Data":"",
-    "DurationNs":"6240"
+    "DurationNs":"21760"
   }
 }
-,{"ph":"X","name":"reduceSumExpKernel(float const*, float*, double*, int, float const*)","pid":14,"tid":1,"ts":"505162630819","dur":"5",
+,{"ph":"X","name":"softmaxWriteKernel","pid":14,"tid":1,"ts":"506201253166","dur":"4",
   "args":{
-    "BeginNs":"505162630819901",
-    "EndNs":"505162630825821",
+    "BeginNs":"506201253166227",
+    "EndNs":"506201253170547",
     "dev-id":"8",
     "queue-id":"0",
-    "Name":"reduceSumExpKernel(float const*, float*, double*, int, float const*)",
-    "pid":"917221",
-    "tid":"917221",
+    "Name":"softmaxWriteKernel",
+    "pid":"1136109",
+    "tid":"1136109",
     "stream-id":"1",
     "Data":"",
-    "DurationNs":"5920"
+    "DurationNs":"4320"
   }
 }
-,{"ph":"X","name":"reduceFinalSumKernel(double const*, double*, int)","pid":14,"tid":1,"ts":"505162630829","dur":"6",
-  "args":{
-    "BeginNs":"505162630829181",
-    "EndNs":"505162630835421",
-    "dev-id":"8",
-    "queue-id":"0",
-    "Name":"reduceFinalSumKernel(double const*, double*, int)",
-    "pid":"917221",
-    "tid":"917221",
-    "stream-id":"1",
-    "Data":"",
-    "DurationNs":"6240"
-  }
-}
-,{"ph":"X","name":"softmaxNormalizeKernel(float*, int, double const*)","pid":14,"tid":1,"ts":"505162630835","dur":"3",
-  "args":{
-    "BeginNs":"505162630835421",
-    "EndNs":"505162630838781",
-    "dev-id":"8",
-    "queue-id":"0",
-    "Name":"softmaxNormalizeKernel(float*, int, double const*)",
-    "pid":"917221",
-    "tid":"917221",
-    "stream-id":"1",
-    "Data":"",
-    "DurationNs":"3360"
-  }
-}
-,{"ts":505162465722,"ph":"s","cat":"DataFlow","id":0,"pid":2,"tid":917221,"name":"dep"}
-,{"ts":505162629940,"ph":"t","cat":"DataFlow","id":0,"pid":1,"tid":0,"name":"dep"}
-,{"ts":505162630842,"ph":"s","cat":"DataFlow","id":1,"pid":2,"tid":917221,"name":"dep"}
-,{"ts":505162630842,"ph":"t","cat":"DataFlow","id":1,"pid":1,"tid":0,"name":"dep"}
-,{"ts":505162630379,"ph":"s","cat":"DataFlow","id":7,"pid":2,"tid":917221,"name":"dep"}
-,{"ts":505162630781,"ph":"t","cat":"DataFlow","id":7,"pid":14,"tid":1,"name":"dep"}
-,{"ts":505162630804,"ph":"s","cat":"DataFlow","id":8,"pid":2,"tid":917221,"name":"dep"}
-,{"ts":505162630813,"ph":"t","cat":"DataFlow","id":8,"pid":14,"tid":1,"name":"dep"}
-,{"ts":505162630813,"ph":"s","cat":"DataFlow","id":9,"pid":2,"tid":917221,"name":"dep"}
-,{"ts":505162630819,"ph":"t","cat":"DataFlow","id":9,"pid":14,"tid":1,"name":"dep"}
-,{"ts":505162630822,"ph":"s","cat":"DataFlow","id":10,"pid":2,"tid":917221,"name":"dep"}
-,{"ts":505162630829,"ph":"t","cat":"DataFlow","id":10,"pid":14,"tid":1,"name":"dep"}
-,{"ts":505162630829,"ph":"s","cat":"DataFlow","id":11,"pid":2,"tid":917221,"name":"dep"}
-,{"ts":505162630835,"ph":"t","cat":"DataFlow","id":11,"pid":14,"tid":1,"name":"dep"}
+,{"ts":506201084572,"ph":"s","cat":"DataFlow","id":0,"pid":2,"tid":1136109,"name":"dep"}
+,{"ts":506201251869,"ph":"t","cat":"DataFlow","id":0,"pid":1,"tid":0,"name":"dep"}
+,{"ts":506201253167,"ph":"s","cat":"DataFlow","id":1,"pid":2,"tid":1136109,"name":"dep"}
+,{"ts":506201253170,"ph":"t","cat":"DataFlow","id":1,"pid":1,"tid":0,"name":"dep"}
+,{"ts":506201252515,"ph":"s","cat":"DataFlow","id":5,"pid":2,"tid":1136109,"name":"dep"}
+,{"ts":506201253112,"ph":"t","cat":"DataFlow","id":5,"pid":14,"tid":1,"name":"dep"}
+,{"ts":506201253137,"ph":"s","cat":"DataFlow","id":6,"pid":2,"tid":1136109,"name":"dep"}
+,{"ts":506201253144,"ph":"t","cat":"DataFlow","id":6,"pid":14,"tid":1,"name":"dep"}
+,{"ts":506201253145,"ph":"s","cat":"DataFlow","id":7,"pid":2,"tid":1136109,"name":"dep"}
+,{"ts":506201253166,"ph":"t","cat":"DataFlow","id":7,"pid":14,"tid":1,"name":"dep"}
 ],
 "otherData": {
     "CMD": "rocminfo",
