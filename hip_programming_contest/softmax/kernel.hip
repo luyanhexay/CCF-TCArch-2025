@@ -11,7 +11,7 @@
 #include <stdint.h>
 
 #ifndef TPB
-#define TPB 256
+#define TPB 128
 #endif
 
 #define HIP_CHECK(cmd) do { \
@@ -52,12 +52,21 @@ __global__ void reduceMaxKernel(const float* __restrict__ x, float* __restrict__
     const float4* x4 = reinterpret_cast<const float4*>(x);
     int idx4 = blockIdx.x * blockDim.x + tid;
     int stride4 = stride;
-    for (; idx4 < numVec; idx4 += stride4) {
+    int threadStride4 = stride4;
+    for (; idx4 < numVec; idx4 += (threadStride4 << 1)) {
         float4 v4 = x4[idx4];
         localMax = v4.x > localMax ? v4.x : localMax;
         localMax = v4.y > localMax ? v4.y : localMax;
         localMax = v4.z > localMax ? v4.z : localMax;
         localMax = v4.w > localMax ? v4.w : localMax;
+        int idx4b = idx4 + threadStride4;
+        if (idx4b < numVec) {
+            float4 w4 = x4[idx4b];
+            localMax = w4.x > localMax ? w4.x : localMax;
+            localMax = w4.y > localMax ? w4.y : localMax;
+            localMax = w4.z > localMax ? w4.z : localMax;
+            localMax = w4.w > localMax ? w4.w : localMax;
+        }
     }
     // 处理尾部不足 4 个元素
     int base = numVec << 2;
@@ -115,7 +124,8 @@ __global__ void reduceSumExpKernel(const float* __restrict__ x,
     float4* y4 = reinterpret_cast<float4*>(y);
     int idx4 = blockIdx.x * blockDim.x + tid;
     int stride4 = stride;
-    for (; idx4 < numVec; idx4 += stride4) {
+    int threadStride4 = stride4;
+    for (; idx4 < numVec; idx4 += (threadStride4 << 1)) {
         float4 v4 = x4[idx4];
         float s0 = v4.x - m;
         float s1 = v4.y - m;
@@ -132,6 +142,26 @@ __global__ void reduceSumExpKernel(const float* __restrict__ x,
         out4.w = (float)t3;
         y4[idx4] = out4; // 缓存 t_i
         localSum += (t0 + t1 + t2 + t3);
+
+        int idx4b = idx4 + threadStride4;
+        if (idx4b < numVec) {
+            float4 w4 = x4[idx4b];
+            float r0 = w4.x - m;
+            float r1 = w4.y - m;
+            float r2 = w4.z - m;
+            float r3 = w4.w - m;
+            double u0 = (double)expf(r0);
+            double u1 = (double)expf(r1);
+            double u2 = (double)expf(r2);
+            double u3 = (double)expf(r3);
+            float4 out4b;
+            out4b.x = (float)u0;
+            out4b.y = (float)u1;
+            out4b.z = (float)u2;
+            out4b.w = (float)u3;
+            y4[idx4b] = out4b;
+            localSum += (u0 + u1 + u2 + u3);
+        }
     }
     // 尾部处理
     int base = numVec << 2;
@@ -184,13 +214,23 @@ __global__ void softmaxNormalizeKernel(float* __restrict__ y, int n, const doubl
     float4* y4 = reinterpret_cast<float4*>(y);
     int idx4 = blockIdx.x * blockDim.x + threadIdx.x;
     int stride4 = stride;
-    for (; idx4 < numVec; idx4 += stride4) {
+    int threadStride4 = stride4;
+    for (; idx4 < numVec; idx4 += (threadStride4 << 1)) {
         float4 v4 = y4[idx4];
         v4.x = v4.x / denom;
         v4.y = v4.y / denom;
         v4.z = v4.z / denom;
         v4.w = v4.w / denom;
         y4[idx4] = v4;
+        int idx4b = idx4 + threadStride4;
+        if (idx4b < numVec) {
+            float4 w4 = y4[idx4b];
+            w4.x = w4.x / denom;
+            w4.y = w4.y / denom;
+            w4.z = w4.z / denom;
+            w4.w = w4.w / denom;
+            y4[idx4b] = w4;
+        }
     }
     // 尾部处理
     int base = numVec << 2;
@@ -274,6 +314,8 @@ __global__ void reduceFinalSumKernel(const double* __restrict__ inVals, double* 
 
 extern "C" void solve(const float* input, float* output, int N) {
     if (N <= 0) return;
+
+    // 保留统一 GPU 路径（移除 CPU 小样例回退）
 
     // 选择合理的 grid 配置
     int threads = TPB;
