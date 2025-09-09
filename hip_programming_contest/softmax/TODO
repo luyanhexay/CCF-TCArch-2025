@@ -69,3 +69,15 @@ Softmax 优化路线图与诊断步骤
 - 结论：
   - 通过去除中间 t_i 写回，减少 HBM 往返，端到端时间进一步下降；仍受 H2D/D2H 主导。
   - 下一步优先做 O5（占用率/launch bounds）与 O4（LDS 银行冲突确认/处理），在保持两读一写的同时榨取核内性能。
+
+九、阶段成果（O5 占用率与 launch bounds 调优）
+- 变更：为在线内核加 __launch_bounds__(TPB)；脚本支持 -DTPB；默认 TPB=128。
+- 测试（单机队列，顺序执行，避免相互取消）：
+  - TPB=128: 6.12s
+  - TPB=256: 6.14s
+  - TPB=512: 6.28s
+- 结论：当前环境最佳为 TPB=128（默认采用）。
+
+十、阶段结论（O4 LDS 银行冲突）
+- 分析：在线内核使用的 LDS 仅存放“每 warp 一个 (m,l)”的小数组（numWarps≤8），写入仅由各 warp 的 lane0 执行，读取由首个 warp 的前 numWarps 线程按顺序读取，地址连续、扇出低；按 AMD 32-bank、4B bank 宽度规则，访问模式不产生明显冲突。
+- 结论：当前实现无须额外 padding 或 swizzling；如后续 profiling 暗示 LDS 热点，再引入 padding（+1）或 XOR 重排。

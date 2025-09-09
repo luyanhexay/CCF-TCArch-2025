@@ -1,4 +1,0 @@
-"Name","Calls","TotalDurationNs","AverageNs","Percentage"
-"onlinePartialKernel",1,26400,26400,50.30487804878049
-"onlineFinalReduceKernel",1,21760,21760,41.46341463414634
-"softmaxWriteKernel",1,4320,4320,8.231707317073171

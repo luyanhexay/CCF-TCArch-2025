@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <math.h>
+#include <stdint.h>
 
 #ifndef TPB
 #define TPB 256
@@ -305,7 +306,7 @@ extern "C" void solve(const float* input, float* output, int N) {
 
     // 计算动态共享内存：每个 warp 存 1 个 (m,l)
     int numWarpsHost = (threads + warpSize - 1) / warpSize;
-    size_t smemOnline = (sizeof(double) + sizeof(float)) * (size_t)numWarpsHost;
+    size_t smemOnline = (sizeof(double) + sizeof(float)) * (size_t)numWarpsHost + 8; // 额外字节保证8字节对齐
 
     // 声明/定义内核（见下方新内核定义）
     extern __global__ void onlinePartialKernel(const float* __restrict__, float* __restrict__, double* __restrict__, int);
@@ -342,14 +343,14 @@ extern "C" void solve(const float* input, float* output, int N) {
 }
 
 // --- 新增：基于在线法的 (m,l) 分块计算 ---
-__global__ void onlinePartialKernel(const float* __restrict__ x,
+__global__ __launch_bounds__(TPB) void onlinePartialKernel(const float* __restrict__ x,
                                     float* __restrict__ blockM,
                                     double* __restrict__ blockL,
                                     int n) {
     const int tid = threadIdx.x;
     const int stride = blockDim.x * gridDim.x;
 
-    float m_local = -INFINITY;
+    float m_local = -FLT_MAX;
     double l_local = 0.0;
 
     // 向量化遍历
@@ -376,7 +377,9 @@ __global__ void onlinePartialKernel(const float* __restrict__ x,
     // 以两级归约方式合并到块级 (m,l)
     extern __shared__ unsigned char smemRaw[];
     int numWarps = (blockDim.x + warpSize - 1) / warpSize;
-    double* sL = reinterpret_cast<double*>(smemRaw);
+    uintptr_t basePtr = reinterpret_cast<uintptr_t>(smemRaw);
+    uintptr_t alignedPtr = (basePtr + 7u) & ~static_cast<uintptr_t>(7u);
+    double* sL = reinterpret_cast<double*>(alignedPtr);
     float* sM = reinterpret_cast<float*>(sL + numWarps);
 
     // Warp 内归约
@@ -397,7 +400,7 @@ __global__ void onlinePartialKernel(const float* __restrict__ x,
 
     // Warp 间归约（由第一个 warp 完成）
     if (warpId == 0) {
-        float m_acc = -INFINITY;
+        float m_acc = -FLT_MAX;
         double l_acc = 0.0;
         if (lane < numWarps) {
             m_acc = sM[lane];
@@ -416,7 +419,7 @@ __global__ void onlinePartialKernel(const float* __restrict__ x,
 }
 
 // --- 新增：最终归约得到 (m, l) ---
-__global__ void onlineFinalReduceKernel(const float* __restrict__ inM,
+__global__ __launch_bounds__(TPB) void onlineFinalReduceKernel(const float* __restrict__ inM,
                                         const double* __restrict__ inL,
                                         float* __restrict__ outM,
                                         double* __restrict__ outL,
@@ -424,7 +427,7 @@ __global__ void onlineFinalReduceKernel(const float* __restrict__ inM,
     const int tid = threadIdx.x;
 
     // 线程私有累积
-    float m_local = -INFINITY;
+    float m_local = -FLT_MAX;
     double l_local = 0.0;
     for (int i = tid; i < len; i += blockDim.x) {
         float m_i = inM[i];
@@ -435,7 +438,9 @@ __global__ void onlineFinalReduceKernel(const float* __restrict__ inM,
     // 两级归约
     extern __shared__ unsigned char smemRaw[];
     int numWarps = (blockDim.x + warpSize - 1) / warpSize;
-    double* sL = reinterpret_cast<double*>(smemRaw);
+    uintptr_t basePtr = reinterpret_cast<uintptr_t>(smemRaw);
+    uintptr_t alignedPtr = (basePtr + 7u) & ~static_cast<uintptr_t>(7u);
+    double* sL = reinterpret_cast<double*>(alignedPtr);
     float* sM = reinterpret_cast<float*>(sL + numWarps);
 
     float m_w = m_local;
@@ -453,7 +458,7 @@ __global__ void onlineFinalReduceKernel(const float* __restrict__ inM,
     }
     __syncthreads();
     if (warpId == 0) {
-        float m_acc = -INFINITY;
+        float m_acc = -FLT_MAX;
         double l_acc = 0.0;
         if (lane < numWarps) {
             m_acc = sM[lane];
@@ -472,7 +477,7 @@ __global__ void onlineFinalReduceKernel(const float* __restrict__ inM,
 }
 
 // --- 新增：直接写出 y ---
-__global__ void softmaxWriteKernel(const float* __restrict__ x,
+__global__ __launch_bounds__(TPB) void softmaxWriteKernel(const float* __restrict__ x,
                                    float* __restrict__ y,
                                    int n,
                                    const float* __restrict__ mPtr,
