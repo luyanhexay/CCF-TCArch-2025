@@ -1,6 +1,8 @@
 .cursor/
 .cursor-server/
 .vscode/
+.vscode-server/
+.local/
 
 .ssh/
 .cache/
@@ -8,3 +10,4 @@
 .bash_logout
 .bashrc
 .profile
+.wget-hsts
