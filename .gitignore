@@ -11,3 +11,13 @@
 .bashrc
 .profile
 .wget-hsts
+
+hip_programming_contest/apsp/apsp
+hip_programming_contest/prefix_sum/prefix_sum
+hip_programming_contest/softmax/softmax
+
+**/.previous_versions/
+**/my_outputs/
+*student.out
+
+*.log
