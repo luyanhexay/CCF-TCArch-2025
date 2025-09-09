@@ -1,0 +1,55 @@
+APSP 优化与执行计划（不考虑 SSSP 备选）
+
+一、方法与现状
+- 采用 GPU 分块 Floyd–Warshall（三阶段：轴心块→轴心行/列→其余块），按 B×B 瓦片在共享内存/LDS 中复用数据。
+- 已做：共享内存 stride=B+1 降低 bank 冲突；Phase3 k 循环展开；行/列快照缓冲；`__restrict__`/`__forceinline__`；可调块大小 `APSP_BLOCK`（默认 32，限制 8..32）。
+- 正确性：饱和加与 INF 守卫；主机侧重边取最小、对角置零。
+
+二、必须遵循的流程
+- 实现 → 分析 → 诊断 → 改进（迭代），profiling 属于必须步骤。
+- 诊断工具：rocprof（关注 Kernel 时间、全局带宽、LDS bank 冲突、占用率等）。
+- 测评方式：使用 `self_test_apsp.sbatch` 在样例集上统计耗时与正确性。
+
+三、优先级优化清单（按顺序执行）
+1) 调优块大小 B（16/24/32），提交 sbatch 测评并用 rocprof 剖析，选出首选 B。
+2) 每线程寄存器微瓦片（2×2/4×4）以提升算术强度、减少 LDS 访问。
+3) 列块协同加载并在 LDS 中转置，提升列方向合并访存效率。
+4) LDS 双缓冲与异步拷贝，重叠加载与计算（Phase2/3）。
+5) 多 HIP streams 重叠 Phase2/Phase3，并尝试 hipGraph 降低内核启动开销。
+6) 使用 hipMallocPitch 进行行对齐分配，更新索引以提高行首对齐与合并度。
+7) 依据剖析数据持续调参（B、展开因子、工作组形状），避免拍脑袋优化。
+
+四、执行与诊断规范（可直接复制执行）
+- 目录：/home/user059/hip_programming_contest/apsp
+
+【提交测评（sbatch）】
+cd /home/user059/hip_programming_contest/apsp && sbatch --export=ALL,APSP_BLOCK=16 ./self_test_apsp.sbatch
+cd /home/user059/hip_programming_contest/apsp && sbatch --export=ALL,APSP_BLOCK=24 ./self_test_apsp.sbatch
+cd /home/user059/hip_programming_contest/apsp && sbatch --export=ALL,APSP_BLOCK=32 ./self_test_apsp.sbatch
+
+【本地构建与基础 profiling（小样例）】
+cd /home/user059/hip_programming_contest/apsp && make -j
+cd /home/user059/hip_programming_contest/apsp && APSP_BLOCK=16 rocprof --stats -o my_outputs/rocprof_B16.csv ./apsp testcases/1.in
+cd /home/user059/hip_programming_contest/apsp && APSP_BLOCK=32 rocprof --stats -o my_outputs/rocprof_B32.csv ./apsp testcases/1.in
+
+五、指标与判定
+- 正确性：全部样例 PASS。
+- 性能选择：对比 B=16/24/32 的总运行时间（sbatch 汇总）与关键硬件指标（rocprof），在稳健性前提下选耗时最少的 B。
+- 剖析关注点：
+  - Kernel 时间占比是否集中在 Phase3；
+  - DRAM 吞吐是否接近上限且受限；
+  - LDS bank 冲突是否显著；
+  - 占用率是否因寄存器/LDS 压力下降。
+
+六、后续里程碑
+- 完成 B 调优并固化配置 → 落地寄存器微瓦片 → 协同加载转置 → 双缓冲/异步 → streams/hipGraph → pitched 分配 → 收敛与清理。
+
+七、当前（单次、串行）APSP_BLOCK 测评记录（存在机器波动，最终需多次取平均）
+- 运行环境：mi100-1，sbatch 串行执行，程序版本含 pivot 行列快照修复。
+- 单次结果：
+  - B=16 → 总耗时 10.99s（job 1665）
+  - B=24 → 总耗时 11.39s（job 1685）
+  - B=32 → 总耗时 10.88s（job 1687）
+- 暂时结论：B=32 略优于 B=16，B=24 较慢。由于性能波动，待“重复多次测定APSP_BLOCK取平均并定稿”后最终确认默认 B。
+
+
