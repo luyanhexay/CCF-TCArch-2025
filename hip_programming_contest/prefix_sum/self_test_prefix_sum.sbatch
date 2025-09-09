@@ -9,7 +9,7 @@
 # --- Script Configuration ---
 # C++ 编译器及参数
 COMPILER="hipcc"
-CXX_FLAGS="-O2"
+CXX_FLAGS=""
 
 # 源文件和可执行文件名
 SOURCE_FILES="main.cpp kernel.hip" # Prefix Sum 由 main.cpp + kernel.hip 组成
