@@ -85,7 +85,7 @@ __global__ void floyd_warshall_block_kernel_phase1(int n, int oversized_n, int k
   update(graph, i, n, oversized_n, C[bi*stride+bj]);
 }
 
-__global__ void floyd_warshall_block_kernel_phase2(int n, int oversized_n, int k, int* graph, int b) {
+__global__ void floyd_warshall_block_kernel_phase2_row(int n, int oversized_n, int k, int* graph, int b) {
   const unsigned int i = blockIdx.x;
   const unsigned int bi = threadIdx.y;
   const unsigned int bj = threadIdx.x;
@@ -111,10 +111,25 @@ __global__ void floyd_warshall_block_kernel_phase2(int n, int oversized_n, int k
   __syncthreads();
 
   update(graph, i1, n, oversized_n, C[bi*stride+bj]);
+}
 
-  // Phase 2 1/2
-  int i3 = k*b*oversized_n + i*b + bi*oversized_n + bj;
-  C[bi*stride + bj] = get(graph, i3, n, oversized_n);
+__global__ void floyd_warshall_block_kernel_phase2_col(int n, int oversized_n, int k, int* graph, int b) {
+  const unsigned int j = blockIdx.x;
+  const unsigned int bi = threadIdx.y;
+  const unsigned int bj = threadIdx.x;
+
+  if (j == k) return;
+
+  extern __shared__ int phase2_shared[];
+  const int stride = b + 1; // Add padding to avoid bank conflicts
+  int *A = phase2_shared;
+  int *B = (int*)&A[b * stride];
+  int *C = (int*)&B[b * stride];
+
+  __syncthreads();
+  int i1 = k*b*oversized_n + j*b + bi*oversized_n + bj;
+  C[bi*stride + bj] = get(graph, i1, n, oversized_n);
+  int i2 = k*b*oversized_n + k*b + bi*oversized_n + bj;
   A[bi*stride + bj] = get(graph, i2, n, oversized_n);
 
   __syncthreads();
@@ -123,8 +138,7 @@ __global__ void floyd_warshall_block_kernel_phase2(int n, int oversized_n, int k
 
   __syncthreads();
 
-  // Block C is the only one that could be changed
-  update(graph, i3, n, oversized_n, C[bi * stride + bj]);
+  update(graph, i1, n, oversized_n, C[bi*stride+bj]);
 }
 
 __global__ void floyd_warshall_block_kernel_phase3(int n, int oversized_n, int k, int* graph, int b) {
@@ -212,7 +226,8 @@ __host__ int blocked_floyd_warshall(int* graph, int n, int b, int* apsp, t_error
 	int k;
 	for (k = 0; k < blocks; k++) {
 		floyd_warshall_block_kernel_phase1<<<1, block_dim, block_size>>>(n, oversized_n, k, device_graph, b);
-		floyd_warshall_block_kernel_phase2<<<blocks, block_dim, block_size*3>>>(n, oversized_n,  k, device_graph, b);
+		floyd_warshall_block_kernel_phase2_row<<<blocks, block_dim, block_size*3>>>(n, oversized_n, k, device_graph, b);
+		floyd_warshall_block_kernel_phase2_col<<<blocks, block_dim, block_size*3>>>(n, oversized_n, k, device_graph, b);
 		floyd_warshall_block_kernel_phase3<<<phase3_grid, block_dim, block_size*3>>>(n, oversized_n, k, device_graph, b);
 	}
 
