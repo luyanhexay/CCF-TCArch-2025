@@ -11,7 +11,7 @@ CXXFLAGS = -O2
 all: $(TARGET)
 
 $(TARGET): $(SRCS) $(HEADERS)
-	$(HIPCC) $(CXXFLAGS) $(SRCS) -o $(TARGET)
+	$(HIPCC) $(CXXFLAGS) -o $(TARGET) $(SRCS)
 
 clean:
 	rm -f $(TARGET) *.o

@@ -3,10 +3,8 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <limits.h>
-extern "C" {
-    #include "blocked_floyd_warshall.h"
-}
-#define INF INT_MAX / 2
+#include "blocked_floyd_warshall.h"
+#define INF 1073741823
 
 __forceinline__
 __host__ int check_hip_error(t_error* err) {
@@ -145,7 +143,7 @@ __global__ void floyd_warshall_block_kernel_phase3(int n, int oversized_n, int k
   update(graph, i1, n, oversized_n, C[bi*b+bj]);
 }
 
-extern "C"
+extern "C" {
 __host__ int blocked_floyd_warshall(int* graph, int n, int b, int* apsp, t_error* err) {
 
 	if (n <= 0) {
@@ -174,8 +172,21 @@ __host__ int blocked_floyd_warshall(int* graph, int n, int b, int* apsp, t_error
 	const size_t size = n * n * sizeof(int);
 	int* device_graph;
 
-	hipMalloc(&device_graph, size);
-	hipMemcpy(device_graph, graph,  size, hipMemcpyHostToDevice);
+	hipError_t hipErr = hipMalloc(&device_graph, size);
+	if (hipErr != hipSuccess) {
+		err->err_code = hipErr;
+		snprintf(err->err_msg, sizeof(err->err_msg), "hipMalloc failed: %s", hipGetErrorString(hipErr));
+		return EXIT_FAILURE;
+	}
+	
+	hipErr = hipMemcpy(device_graph, graph, size, hipMemcpyHostToDevice);
+	if (hipErr != hipSuccess) {
+		hipError_t freeErr = hipFree(device_graph);
+		(void)freeErr; // 忽略释放错误
+		err->err_code = hipErr;
+		snprintf(err->err_msg, sizeof(err->err_msg), "hipMemcpy failed: %s", hipGetErrorString(hipErr));
+		return EXIT_FAILURE;
+	}
 
 	const int blocks = oversized_n / b;
 	dim3 block_dim(b, b, 1);
@@ -190,8 +201,22 @@ __host__ int blocked_floyd_warshall(int* graph, int n, int b, int* apsp, t_error
 		floyd_warshall_block_kernel_phase3<<<phase3_grid, block_dim, block_size*3>>>(n, oversized_n, k, device_graph, b);
 	}
 
-	hipMemcpy(apsp, device_graph, size, hipMemcpyDeviceToHost);
-	hipFree(device_graph);
+	hipErr = hipMemcpy(apsp, device_graph, size, hipMemcpyDeviceToHost);
+	if (hipErr != hipSuccess) {
+		hipError_t freeErr = hipFree(device_graph);
+		(void)freeErr; // 忽略释放错误
+		err->err_code = hipErr;
+		snprintf(err->err_msg, sizeof(err->err_msg), "hipMemcpy failed: %s", hipGetErrorString(hipErr));
+		return EXIT_FAILURE;
+	}
+	
+	hipErr = hipFree(device_graph);
+	if (hipErr != hipSuccess) {
+		err->err_code = hipErr;
+		snprintf(err->err_msg, sizeof(err->err_msg), "hipFree failed: %s", hipGetErrorString(hipErr));
+		return EXIT_FAILURE;
+	}
 
 	return check_hip_error(err);
+}
 }
