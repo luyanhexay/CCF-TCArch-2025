@@ -1,14 +1,10 @@
-#ifndef ERRORS_H
-#define ERRORS_H
-
 /**
  * Generic errors structure that contains some information about an error,
  * like error code and message.
  */
-typedef struct error
-{
-    int err_code;
-    char err_msg[100];
+typedef struct error {
+	int err_code;
+	char err_msg[100];
 } t_error;
 
 /**
@@ -22,5 +18,3 @@ typedef struct error
  * the choice of the message is free.
  */
 #define WRONG_BLOCK_SIZE_ERR 2
-
-#endif // ERRORS_H
