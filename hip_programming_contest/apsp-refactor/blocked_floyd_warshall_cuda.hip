@@ -1,6 +1,4 @@
-#include <cuda.h>
-#include <cuda_runtime.h>
-#include <driver_functions.h>
+#include <hip/hip_runtime.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -11,11 +9,11 @@ extern "C" {
 #define INF INT_MAX / 2
 
 __forceinline__
-__host__ int check_cuda_error(t_error* err) {
-	cudaError_t errCode = cudaPeekAtLastError();
-	if (errCode != cudaSuccess) {
+__host__ int check_hip_error(t_error* err) {
+	hipError_t errCode = hipPeekAtLastError();
+	if (errCode != hipSuccess) {
 		err->err_code = errCode;
-		snprintf(err->err_msg, sizeof(err->err_msg), "%s", cudaGetErrorString(errCode));
+		snprintf(err->err_msg, sizeof(err->err_msg), "%s", hipGetErrorString(errCode));
 		return EXIT_FAILURE;
 	}
 	return EXIT_SUCCESS;
@@ -176,8 +174,8 @@ __host__ int blocked_floyd_warshall(int* graph, int n, int b, int* apsp, t_error
 	const size_t size = n * n * sizeof(int);
 	int* device_graph;
 
-	cudaMalloc(&device_graph, size);
-	cudaMemcpy(device_graph, graph,  size, cudaMemcpyHostToDevice);
+	hipMalloc(&device_graph, size);
+	hipMemcpy(device_graph, graph,  size, hipMemcpyHostToDevice);
 
 	const int blocks = oversized_n / b;
 	dim3 block_dim(b, b, 1);
@@ -192,8 +190,8 @@ __host__ int blocked_floyd_warshall(int* graph, int n, int b, int* apsp, t_error
 		floyd_warshall_block_kernel_phase3<<<phase3_grid, block_dim, block_size*3>>>(n, oversized_n, k, device_graph, b);
 	}
 
-	cudaMemcpy(apsp, device_graph, size, cudaMemcpyDeviceToHost);
-	cudaFree(device_graph);
+	hipMemcpy(apsp, device_graph, size, hipMemcpyDeviceToHost);
+	hipFree(device_graph);
 
-	return check_cuda_error(err);
+	return check_hip_error(err);
 }
