@@ -3,10 +3,19 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <limits.h>
+#include <iostream>
 extern "C" {
     #include "blocked_floyd_warshall.h"
 }
 #define INF INT_MAX / 2
+
+#define HIP_CHECK(cmd) do { \
+    hipError_t e = (cmd); \
+    if (e != hipSuccess) { \
+        std::cerr << "HIP error: " << hipGetErrorString(e) << "\n"; \
+        std::exit(1); \
+    } \
+} while(0)
 
 __forceinline__
 __host__ int check_hip_error(t_error* err) {
@@ -18,6 +27,7 @@ __host__ int check_hip_error(t_error* err) {
 	}
 	return EXIT_SUCCESS;
 }
+
 
 __forceinline__
 __device__ int get(int *graph, int flat_index, int n, int oversized_n) {
@@ -40,11 +50,12 @@ __device__ void update(int *graph, int flat_index, int n, int oversized_n, int v
 }
 
 __forceinline__
-__device__ void block_calc(int* C, int* A, int* B, int bj, int bi, int b) {
+__device__ void block_calc(int* C, int* A, int* B, int bj, int bi, int b, int stride) {
+  #pragma unroll
   for (int k = 0; k < b; k++) {
-    int sum = A[bi*b + k] + B[k*b + bj];
-    if (C[bi*b + bj] > sum) {
-      C[bi*b + bj] = sum;
+    int sum = A[bi*stride + k] + B[k*stride + bj];
+    if (C[bi*stride + bj] > sum) {
+      C[bi*stride + bj] = sum;
     }
     __syncthreads();
   }
@@ -55,22 +66,23 @@ __global__ void floyd_warshall_block_kernel_phase1(int n, int oversized_n, int k
   const unsigned int bj = threadIdx.x;
 
   extern __shared__ int phase1_shared[];
+  const int stride = b + 1; // Add padding to avoid bank conflicts
   int *C = phase1_shared;
 
   __syncthreads();
 
   // Transfer to temp shared arrays
   int i = k*b*oversized_n + k*b + bi*oversized_n + bj;
-  C[bi*b + bj] = get(graph, i, n, oversized_n);
+  C[bi*stride + bj] = get(graph, i, n, oversized_n);
 
   __syncthreads();
 
-  block_calc(C, C, C, bi, bj, b);
+  block_calc(C, C, C, bi, bj, b, stride);
 
   __syncthreads();
 
   // Transfer back to graph
-  update(graph, i, n, oversized_n, C[bi*b+bj]);
+  update(graph, i, n, oversized_n, C[bi*stride+bj]);
 }
 
 __global__ void floyd_warshall_block_kernel_phase2(int n, int oversized_n, int k, int* graph, int b) {
@@ -81,37 +93,38 @@ __global__ void floyd_warshall_block_kernel_phase2(int n, int oversized_n, int k
   if (i == k) return;
 
   extern __shared__ int phase2_shared[];
+  const int stride = b + 1; // Add padding to avoid bank conflicts
   int *A = phase2_shared;
-  int *B = (int*)&A[b * b];
-  int *C = (int*)&B[b * b];
+  int *B = (int*)&A[b * stride];
+  int *C = (int*)&B[b * stride];
 
   __syncthreads();
   int i1 = i*b*oversized_n + k*b + bi*oversized_n + bj;
-  C[bi*b + bj] = get(graph, i1, n, oversized_n);
+  C[bi*stride + bj] = get(graph, i1, n, oversized_n);
   int i2 = k*b*oversized_n + k*b + bi*oversized_n + bj;
-  B[bi*b + bj] = get(graph, i2, n, oversized_n);
+  B[bi*stride + bj] = get(graph, i2, n, oversized_n);
 
   __syncthreads();
 
-  block_calc(C, C, B, bi, bj, b);
+  block_calc(C, C, B, bi, bj, b, stride);
 
   __syncthreads();
 
-  update(graph, i1, n, oversized_n, C[bi*b+bj]);
+  update(graph, i1, n, oversized_n, C[bi*stride+bj]);
 
   // Phase 2 1/2
   int i3 = k*b*oversized_n + i*b + bi*oversized_n + bj;
-  C[bi*b + bj] = get(graph, i3, n, oversized_n);
-  A[bi*b + bj] = get(graph, i2, n, oversized_n);
+  C[bi*stride + bj] = get(graph, i3, n, oversized_n);
+  A[bi*stride + bj] = get(graph, i2, n, oversized_n);
 
   __syncthreads();
 
-  block_calc(C, A, C, bi, bj, b);
+  block_calc(C, A, C, bi, bj, b, stride);
 
   __syncthreads();
 
   // Block C is the only one that could be changed
-  update(graph, i3, n, oversized_n, C[bi * b + bj]);
+  update(graph, i3, n, oversized_n, C[bi * stride + bj]);
 }
 
 __global__ void floyd_warshall_block_kernel_phase3(int n, int oversized_n, int k, int* graph, int b) {
@@ -123,26 +136,27 @@ __global__ void floyd_warshall_block_kernel_phase3(int n, int oversized_n, int k
   if (i == k && j == k) return;
 
   extern __shared__ int phase3_shared[];
+  const int stride = b + 1; // Add padding to avoid bank conflicts
   int *A = phase3_shared;
-  int *B = (int*)&A[b * b];
-  int *C = (int*)&B[b * b];
+  int *B = (int*)&A[b * stride];
+  int *C = (int*)&B[b * stride];
 
   __syncthreads();
 
   int i1 = i*b*oversized_n + j*b + bi*oversized_n + bj;
-  C[bi*b + bj] = get(graph, i1, n, oversized_n);
+  C[bi*stride + bj] = get(graph, i1, n, oversized_n);
   int i2 = i*b*oversized_n + k*b + bi*oversized_n + bj;
-  A[bi*b + bj] = get(graph, i2, n, oversized_n);
+  A[bi*stride + bj] = get(graph, i2, n, oversized_n);
   int i3 = k*b*oversized_n + j*b + bi*oversized_n + bj;
-  B[bi*b + bj] = get(graph, i3, n, oversized_n);
+  B[bi*stride + bj] = get(graph, i3, n, oversized_n);
 
   __syncthreads();
 
-  block_calc(C, A, B, bi, bj, b);
+  block_calc(C, A, B, bi, bj, b, stride);
 
   __syncthreads();
 
-  update(graph, i1, n, oversized_n, C[bi*b+bj]);
+  update(graph, i1, n, oversized_n, C[bi*stride+bj]);
 }
 
 extern "C"
@@ -192,7 +206,8 @@ __host__ int blocked_floyd_warshall(int* graph, int n, int b, int* apsp, t_error
 	dim3 block_dim(b, b, 1);
 	dim3 phase3_grid(blocks, blocks, 1);
 
-	const size_t block_size = b * b * sizeof(int);
+	const int stride = b + 1; // Add padding to avoid bank conflicts
+	const size_t block_size = b * stride * sizeof(int);
 
 	int k;
 	for (k = 0; k < blocks; k++) {

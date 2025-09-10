@@ -17,6 +17,7 @@ hip_programming_contest/prefix_sum/prefix_sum
 hip_programming_contest/softmax/softmax
 
 **/.previous_versions/
+**/.history/
 **/my_outputs/
 *student.out
 **/results.*
