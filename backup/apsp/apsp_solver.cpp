@@ -1,4 +1,5 @@
 #include "apsp_solver.h"
+#include "kernels.h"
 #include <cstring>
 
 // HIP错误检查宏
@@ -18,6 +19,7 @@ APSP_Solver::APSP_Solver()
     , h_graph_pinned(nullptr)
     , h_result_pinned(nullptr)
     , pinned_size(0)
+    , using_memory_pool(false)
     , initialized(false)
     , graph_loaded(false)
 {
@@ -45,12 +47,24 @@ int APSP_Solver::allocate_gpu_memory(int V) {
     
     // 释放旧内存
     if (d_graph != nullptr) {
-        HIP_CHECK(hipFree(d_graph));
+        if (using_memory_pool) {
+            g_memory_pool.release_gpu_memory(d_graph);
+        } else {
+            HIP_CHECK(hipFree(d_graph));
+        }
         d_graph = nullptr;
     }
     
     // 分配新内存
-    HIP_CHECK(hipMalloc(&d_graph, required_size));
+    if (using_memory_pool) {
+        d_graph = (int*)g_memory_pool.get_gpu_memory(required_size);
+        if (d_graph == nullptr) {
+            set_error(-1, "Failed to get GPU memory from pool");
+            return -1;
+        }
+    } else {
+        HIP_CHECK(hipMalloc(&d_graph, required_size));
+    }
     allocated_size = required_size;
     
     return 0;
@@ -66,17 +80,35 @@ int APSP_Solver::allocate_pinned_memory(int V) {
     
     // 释放旧内存
     if (h_graph_pinned != nullptr) {
-        HIP_CHECK(hipHostFree(h_graph_pinned));
+        if (using_memory_pool) {
+            g_memory_pool.release_pinned_memory(h_graph_pinned);
+        } else {
+            HIP_CHECK(hipHostFree(h_graph_pinned));
+        }
         h_graph_pinned = nullptr;
     }
     if (h_result_pinned != nullptr) {
-        HIP_CHECK(hipHostFree(h_result_pinned));
+        if (using_memory_pool) {
+            g_memory_pool.release_pinned_memory(h_result_pinned);
+        } else {
+            HIP_CHECK(hipHostFree(h_result_pinned));
+        }
         h_result_pinned = nullptr;
     }
     
     // 分配新的页锁定内存
-    HIP_CHECK(hipHostMalloc(&h_graph_pinned, required_size));
-    HIP_CHECK(hipHostMalloc(&h_result_pinned, required_size));
+    if (using_memory_pool) {
+        h_graph_pinned = (int*)g_memory_pool.get_pinned_memory(required_size);
+        h_result_pinned = (int*)g_memory_pool.get_pinned_memory(required_size);
+        
+        if (h_graph_pinned == nullptr || h_result_pinned == nullptr) {
+            set_error(-1, "Failed to get pinned memory from pool");
+            return -1;
+        }
+    } else {
+        HIP_CHECK(hipHostMalloc(&h_graph_pinned, required_size));
+        HIP_CHECK(hipHostMalloc(&h_result_pinned, required_size));
+    }
     pinned_size = required_size;
     
     return 0;
@@ -84,17 +116,29 @@ int APSP_Solver::allocate_pinned_memory(int V) {
 
 void APSP_Solver::cleanup_memory() {
     if (d_graph != nullptr) {
-        hipFree(d_graph);
+        if (using_memory_pool) {
+            g_memory_pool.release_gpu_memory(d_graph);
+        } else {
+            hipFree(d_graph);
+        }
         d_graph = nullptr;
     }
     
     if (h_graph_pinned != nullptr) {
-        hipHostFree(h_graph_pinned);
+        if (using_memory_pool) {
+            g_memory_pool.release_pinned_memory(h_graph_pinned);
+        } else {
+            hipHostFree(h_graph_pinned);
+        }
         h_graph_pinned = nullptr;
     }
     
     if (h_result_pinned != nullptr) {
-        hipHostFree(h_result_pinned);
+        if (using_memory_pool) {
+            g_memory_pool.release_pinned_memory(h_result_pinned);
+        } else {
+            hipHostFree(h_result_pinned);
+        }
         h_result_pinned = nullptr;
     }
     

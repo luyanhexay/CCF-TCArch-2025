@@ -9,11 +9,11 @@
 # --- Script Configuration ---
 # C++ 编译器及参数
 COMPILER="hipcc"
-CXX_FLAGS="-O2"
+CXX_FLAGS="-O3"
 
 # 源文件和可执行文件名
-SOURCE_FILES="main.cpp kernel.hip blocked_floyd_warshall_hip.hip apsp_solver_kernels.hip apsp_solver.cpp" # APSP 已拆分：主程序 + 核心 + 求解器 + GPU kernels
-EXECUTABLE="apsp"
+SOURCE_FILES="main.cpp kernel.hip" # Prefix Sum 由 main.cpp + kernel.hip 组成
+EXECUTABLE="prefix_sum"
 
 # 测试用例和输出结果的目录
 TEST_CASE_DIR="testcases"
@@ -76,7 +76,7 @@ for input_file in ${TEST_CASE_DIR}/*.in; do
         continue
     fi
     
-    # 运行并计时。注意：这里的调用方式从 ./main <input_file> 改为了 ./apsp <input_file>
+    # 运行并计时。注意：这里的调用方式是 ./main <input_file>
     # 使用 /usr/bin/time 命令，并将时间输出 (stderr) 捕获到 EXEC_TIME 变量
     EXEC_TIME=$( { /usr/bin/time -f "%e" ./${EXECUTABLE} "${input_file}" > "${my_output_file}"; } 2>&1 )
     

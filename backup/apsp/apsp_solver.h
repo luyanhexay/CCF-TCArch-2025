@@ -4,6 +4,7 @@
 #include <hip/hip_runtime.h>
 #include <iostream>
 #include <memory>
+#include "memory_pool.h"
 
 /**
  * APSP_Solver类 - 管理GPU资源的持久化计算环境
@@ -26,6 +27,8 @@ private:
     int* h_result_pinned;      // 页锁定的结果内存
     size_t pinned_size;        // 页锁定内存大小
     
+    // 内存池管理
+    bool using_memory_pool;    // 是否使用内存池
     
     // 状态标志
     bool initialized;          // 是否已初始化

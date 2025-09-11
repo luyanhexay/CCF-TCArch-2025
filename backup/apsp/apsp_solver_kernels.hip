@@ -1,15 +1,8 @@
 #include "apsp_solver.h"
+#include "kernels.h"
 
 // 这个文件包含APSP_Solver中需要在GPU上执行的kernel调用
 // 因为kernel调用必须在.hip文件中进行
-
-// 前向声明kernel函数
-extern "C" {
-__global__ void floyd_warshall_block_kernel_phase1(int n, int oversized_n, int k, int* graph, int b);
-__global__ void floyd_warshall_block_kernel_phase2_row(int n, int oversized_n, int k, int* graph, int b);
-__global__ void floyd_warshall_block_kernel_phase2_col(int n, int oversized_n, int k, int* graph, int b);
-__global__ void floyd_warshall_block_kernel_phase3(int n, int oversized_n, int k, int* graph, int b);
-}
 
 extern "C" int apsp_solver_solve_gpu(int V, int oversized_n, int block_size, int* d_graph) {
     const int blocks = oversized_n / block_size;

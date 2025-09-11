@@ -14,7 +14,7 @@
 #endif
 
 #ifndef ITEMS_PER_THREAD
-#define ITEMS_PER_THREAD 4 // 每线程处理 K 个元素（推荐 4 或 8）
+#define ITEMS_PER_THREAD 8 // 每线程处理 K 个元素（推荐 4 或 8）
 #endif
 
 #ifndef CPU_FALLBACK_THRESHOLD

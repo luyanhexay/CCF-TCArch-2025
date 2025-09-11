@@ -1,4 +1,4 @@
-#include "main.h"
+#include "main.h" // 假设你的 solve 函数声明在此
 #include <cstdio>
 #include <cctype>
 #include <vector>
