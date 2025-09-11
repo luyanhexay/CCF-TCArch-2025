@@ -1,6 +1,22 @@
 #include "main.h"
 #include <cstdio>
 
+__global__ void warmup_kernel() {}
+
+static void hip_warmup_once()
+{
+    // 1) 提前创建上下文
+    hipFree(0);                    // 常用的“唤醒设备”手段
+    // 2) 提前创建 stream（如需）
+    hipStream_t s; hipStreamCreate(&s);
+    // 3) 发一个极小的 kernel，确保 code object 装载到驱动
+    hipLaunchKernelGGL(warmup_kernel, dim3(1), dim3(1), 0, s);
+    hipStreamSynchronize(s);
+    hipStreamDestroy(s);
+    // 此刻：上下文/模块已就绪，后续真正的 kernel 不再付这笔代价
+}
+
+
 // --- Fast I/O for Integers ---
 // Uses getchar() for fast reading of numbers.
 inline int read_int() {
@@ -64,6 +80,9 @@ int main(int argc, char *argv[]) {
         std::cerr << "usage: " << argv[0] << " <input_file>" << std::endl;
         return 1;
     }
+    std::thread hip_init_thread([]{
+        hip_warmup_once();
+    });
 
     // 2. Redirect standard input from file for fast reading
     if (freopen(argv[1], "r", stdin) == NULL) {
@@ -90,9 +109,12 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < N; ++i) {
         h_input_pinned[i] = read_int();
     }
+        // 等 HIP 初始化线程收尾（如果它比 I/O 慢，就等待；如果它更快，则已隐藏）
+    hip_init_thread.join();
 
     // 6. Call the GPU solver
     solve(h_input_pinned, h_output_pinned, N);
+    // solve(h_input_pinned, h_output_pinned, N);
     
     // 7. Write the output from pinned memory using the fast I/O function
     for (int i = 0; i < N; ++i) {

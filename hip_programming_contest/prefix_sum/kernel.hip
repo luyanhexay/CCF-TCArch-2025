@@ -10,7 +10,7 @@
 // 可调参数
 // -------------------------
 #ifndef BLOCK
-#define BLOCK 256 // 需为 warpSize 的倍数（在 AMD 上 warpSize=64）
+#define BLOCK 512 // 需为 warpSize 的倍数（在 AMD 上 warpSize=64）
 #endif
 
 #ifndef ITEMS_PER_THREAD
@@ -19,6 +19,10 @@
 
 #ifndef CPU_FALLBACK_THRESHOLD
 #define CPU_FALLBACK_THRESHOLD (0) // 小规模直接走 CPU（可按机型调）
+#endif
+
+#ifndef ENABLE_TIMING
+#define ENABLE_TIMING 0
 #endif
 
 // -------------------------
@@ -34,6 +38,42 @@
             std::abort();                                                                       \
         }                                                                                       \
     } while (0)
+
+struct GpuTimer
+{
+    hipEvent_t start{}, stop{};
+    float ms{0.0f};
+    GpuTimer()
+    {
+        hipEventCreate(&start);
+        hipEventCreate(&stop);
+    }
+    ~GpuTimer()
+    {
+        hipEventDestroy(start);
+        hipEventDestroy(stop);
+    }
+    void tic() { hipEventRecord(start, 0); }
+    float toc_sync()
+    {
+        hipEventRecord(stop, 0);
+        hipEventSynchronize(stop);
+        hipEventElapsedTime(&ms, start, stop);
+        return ms;
+    }
+};
+
+struct CpuTimer
+{
+    using clk = std::chrono::high_resolution_clock;
+    std::chrono::time_point<clk> t0, t1;
+    void tic() { t0 = clk::now(); }
+    double toc_ms()
+    {
+        t1 = clk::now();
+        return std::chrono::duration<double, std::milli>(t1 - t0).count();
+    }
+};
 
 // -------------------------
 // 简单 CPU 包含性前缀（用于小 N fallback / 或校验）
@@ -257,22 +297,52 @@ extern "C" void solve(const int *input, int *output, int N)
     //     cpu_inclusive_scan(input, output, N);
     //     return;
     // }
+#if ENABLE_TIMING
+    CpuTimer cpuAll;
+    cpuAll.tic();
+#endif
 
     constexpr int K = ITEMS_PER_THREAD;
     const int TILE = BLOCK * K;
     const int numBlocks = (N + TILE - 1) / TILE;
 
+    // ---------- 计时器 ----------
+#if ENABLE_TIMING
+    GpuTimer tH2D, tK_block, tBS_D2H, tBS_scanCPU, tBS_H2D, tK_add, tD2H, tFree, tSync;
+    CpuTimer tAlloc, tBS_cpuScan, tAllHostOps;
+    tAllHostOps.tic();
+#endif
+
+    // ---------- 分配 ----------
+#if ENABLE_TIMING
+    tAlloc.tic();
+#endif
+
     // 设备内存
     int *d_in = nullptr, *d_out = nullptr, *d_bs = nullptr, *d_bs_excl = nullptr;
     HIP_CHECK(hipMalloc(&d_in, N * sizeof(int)));
     HIP_CHECK(hipMalloc(&d_out, N * sizeof(int)));
-    HIP_CHECK(hipMemcpy(d_in, input, N * sizeof(int), hipMemcpyHostToDevice));
+    // HIP_CHECK(hipMemcpy(d_in, input, N * sizeof(int), hipMemcpyHostToDevice));
 
     if (numBlocks > 1)
     {
         HIP_CHECK(hipMalloc(&d_bs, numBlocks * sizeof(int)));
         HIP_CHECK(hipMalloc(&d_bs_excl, numBlocks * sizeof(int)));
     }
+#if ENABLE_TIMING
+    double msAlloc = tAlloc.toc_ms();
+#endif
+    // ---------- H2D ----------
+#if ENABLE_TIMING
+    tH2D.tic();
+#endif
+    HIP_CHECK(hipMemcpy(d_in, input, N * sizeof(int), hipMemcpyHostToDevice));
+#if ENABLE_TIMING
+    float msH2D = tH2D.toc_sync();
+#endif
+#if ENABLE_TIMING
+    tK_block.tic();
+#endif
 
     // 共享内存：K * numWarps * sizeof(int)
     const int numWarps = BLOCK / warpSize;                                // AMD: warpSize=64
@@ -283,36 +353,107 @@ extern "C" void solve(const int *input, int *output, int N)
                        dim3(numBlocks), dim3(BLOCK), shmem_bytes, 0,
                        d_in, d_out, d_bs, N);
     HIP_CHECK(hipGetLastError());
-
+#if ENABLE_TIMING
+    float msK_block = tK_block.toc_sync();
+#endif
+// ---------- 块间 exclusive（两段式） ----------
+#if ENABLE_TIMING
+    float msBS_D2H = 0, msBS_H2D = 0, msK_add_ms = 0, msBS_cpuScan = 0;
+    double msCpuBlockScan = 0.0;
+#endif
     // 2) 块间：对 blockSums 做 exclusive 扫描，再做 uniform add
     if (numBlocks > 1)
     {
+#if ENABLE_TIMING
+        tBS_D2H.tic();
+#endif
         // 简易路线：拷到 CPU 做 exclusive（可替换为 GPU 递归）
         std::vector<int> h_bs(numBlocks), h_ex(numBlocks);
         HIP_CHECK(hipMemcpy(h_bs.data(), d_bs, numBlocks * sizeof(int), hipMemcpyDeviceToHost));
+#if ENABLE_TIMING
+        msBS_D2H = tBS_D2H.toc_sync();
+#endif
+#if ENABLE_TIMING
+        tBS_cpuScan.tic();
+#endif
         long long acc = 0;
         for (int i = 0; i < numBlocks; ++i)
         {
             h_ex[i] = static_cast<int>(acc);
             acc += h_bs[i];
         }
+#if ENABLE_TIMING
+        msCpuBlockScan = tBS_cpuScan.toc_ms();
+#endif
+        // --- H2D: blockOffsets (exclusive) ---
+#if ENABLE_TIMING
+        tBS_H2D.tic();
+#endif
         HIP_CHECK(hipMemcpy(d_bs_excl, h_ex.data(), numBlocks * sizeof(int), hipMemcpyHostToDevice));
-
+#if ENABLE_TIMING
+        msBS_H2D = tBS_H2D.toc_sync();
+#endif
         // uniform add（条带式索引保持一致）
+#if ENABLE_TIMING
+        tK_add.tic();
+#endif
         hipLaunchKernelGGL((uniform_add_striped<K>),
                            dim3(numBlocks), dim3(BLOCK), 0, 0,
                            d_bs_excl, d_out, N);
         HIP_CHECK(hipGetLastError());
+#if ENABLE_TIMING
+        msK_add_ms = tK_add.toc_sync();
+#endif
     }
 
-    // 3) 回拷
+// 3) 回拷
+#if ENABLE_TIMING
+    tD2H.tic();
+#endif
     HIP_CHECK(hipMemcpy(output, d_out, N * sizeof(int), hipMemcpyDeviceToHost));
-
+#if ENABLE_TIMING
+    float msD2H = tD2H.toc_sync();
+#endif
+    // ---------- 同步（确保所有 GPU 活动结束） ----------
+#if ENABLE_TIMING
+    tSync.tic();
+#endif
+    HIP_CHECK(hipDeviceSynchronize());
+#if ENABLE_TIMING
+    float msSync = tSync.toc_sync(); // 这里一般很小
+#endif
     // 4) 资源回收
+#if ENABLE_TIMING
+    tFree.tic();
+#endif
     if (d_bs_excl)
         hipFree(d_bs_excl);
     if (d_bs)
         hipFree(d_bs);
     hipFree(d_out);
     hipFree(d_in);
+#if ENABLE_TIMING
+    float msFreeSync = tFree.toc_sync();
+    double msHostOps = tAllHostOps.toc_ms();
+#endif
+#if ENABLE_TIMING
+    double msAll = cpuAll.toc_ms();
+    // 分项打印
+    printf("[TIMING] solve(): N=%d, BLOCK=%d, K=%d, numBlocks=%d\n", N, BLOCK, K, numBlocks);
+    printf("  Alloc(HOST+API)=%.3f ms\n", msAlloc);
+    printf("  H2D          =%.3f ms\n", msH2D);
+    printf("  Kern-Block   =%.3f ms\n", msK_block);
+    if (numBlocks > 1)
+    {
+        printf("  BS D2H       =%.3f ms\n", msBS_D2H);
+        printf("  BS CPU scan  =%.3f ms\n", msCpuBlockScan);
+        printf("  BS H2D       =%.3f ms\n", msBS_H2D);
+        printf("  Kern-Add     =%.3f ms\n", msK_add_ms);
+    }
+    printf("  D2H          =%.3f ms\n", msD2H);
+    printf("  DevSync      =%.3f ms\n", msSync);
+    printf("  Free         =%.3f ms\n", msFreeSync);
+    printf("  HostOps(all in solve) = %.3f ms\n", msHostOps);
+    printf("  === TOTAL solve wall time = %.3f ms ===\n", msAll);
+#endif
 }

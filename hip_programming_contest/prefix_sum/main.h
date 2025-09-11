@@ -5,6 +5,7 @@
 #include <vector>
 #include <iomanip>
 #include <hip/hip_runtime.h>
+#include <thread>
 #include <fstream>
 
 #define HIP_CHECK(call) do { \

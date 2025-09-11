@@ -122,8 +122,9 @@ extern "C" void solve(const float* input, float* output, int N) {
     int numWarpsHost = (threads + warpSize - 1) / warpSize;
     size_t smemOnline = (sizeof(double) + sizeof(float)) * (size_t)numWarpsHost + 8; // 额外字节保证8字节对齐
 
-    // 声明融合内核函数
-    extern __global__ void fusedSoftmaxKernel(const float* __restrict__, float* __restrict__, int, int);
+    // 计算共享内存大小：用于缓存输入数据和归约
+    size_t smemDataSize = sizeof(float) * (size_t)threads; // 每个线程块缓存的数据
+    size_t totalSmemSize = smemOnline + smemDataSize;
 
     // 为块级 (m,l) 缓冲分配内存
     float* d_blockM = nullptr;
