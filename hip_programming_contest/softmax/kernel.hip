@@ -9,8 +9,17 @@
 #include <math.h>
 #include <stdint.h>
 
+// 最优参数配置（基于性能测试结果）
 #ifndef TPB
-#define TPB 128
+#define TPB 256
+#endif
+
+#ifndef GRID_MULTIPLIER
+#define GRID_MULTIPLIER 4
+#endif
+
+#ifndef PINNED_MEMORY_THRESHOLD
+#define PINNED_MEMORY_THRESHOLD 500000
 #endif
 
 #define HIP_CHECK(cmd) do { \
@@ -70,8 +79,8 @@ extern "C" void solve(const float* input, float* output, int N) {
     // 选择合理的线程配置
     int threads = TPB;
     
-    // 启动足够多的线程块来饱和GPU，每个CU启动4个块
-    int blocks = numCU * 4;
+    // 启动足够多的线程块来饱和GPU，每个CU启动GRID_MULTIPLIER个块
+    int blocks = numCU * GRID_MULTIPLIER;
     
     // 如果N很小，不需要启动这么多块
     int required_blocks = (N + threads - 1) / threads;
@@ -83,17 +92,25 @@ extern "C" void solve(const float* input, float* output, int N) {
     int maxBlocks = 65535;
     if (blocks > maxBlocks) blocks = maxBlocks;
 
+    // 创建HIP流用于异步执行
+    hipStream_t stream;
+    HIP_CHECK(hipStreamCreate(&stream));
+
     // 设备内存分配
     float* d_x = nullptr;
     float* d_y = nullptr;
     HIP_CHECK(hipMalloc(&d_x, sizeof(float) * (size_t)N));
     HIP_CHECK(hipMalloc(&d_y, sizeof(float) * (size_t)N));
 
-    // 注册页锁定内存以提升传输带宽
-    HIP_CHECK(hipHostRegister((void*)input, sizeof(float) * (size_t)N, 0));
-    HIP_CHECK(hipHostRegister((void*)output, sizeof(float) * (size_t)N, 0));
+    // 优化：对于大数据集，使用页锁定内存；小数据集跳过以减少开销
+    bool usePinnedMemory = (N > PINNED_MEMORY_THRESHOLD);
+    if (usePinnedMemory) {
+        HIP_CHECK(hipHostRegister((void*)input, sizeof(float) * (size_t)N, 0));
+        HIP_CHECK(hipHostRegister((void*)output, sizeof(float) * (size_t)N, 0));
+    }
 
-    HIP_CHECK(hipMemcpy(d_x, input, sizeof(float) * (size_t)N, hipMemcpyHostToDevice));
+    // 异步H2D传输
+    HIP_CHECK(hipMemcpyAsync(d_x, input, sizeof(float) * (size_t)N, hipMemcpyHostToDevice, stream));
 
     // 为块级 (m,l) 缓冲分配内存
     float* d_blockM = nullptr;
@@ -110,8 +127,8 @@ extern "C" void solve(const float* input, float* output, int N) {
     extern __global__ void onlineFinalReduceKernel(const float* __restrict__, const double* __restrict__, float* __restrict__, double* __restrict__, int);
     extern __global__ void softmaxWriteKernel(const float* __restrict__, float* __restrict__, int, const float* __restrict__, const double* __restrict__);
 
-    // Pass1: 各块生成 (m_b, l_b)
-    onlinePartialKernel<<<blocks, threads, smemOnline>>>(d_x, d_blockM, d_blockL, N);
+    // Pass1: 各块生成 (m_b, l_b) - 异步执行
+    onlinePartialKernel<<<blocks, threads, smemOnline, stream>>>(d_x, d_blockM, d_blockL, N);
     HIP_CHECK(hipGetLastError());
 
     // 设备端最终归约得到 (m, l)
@@ -119,14 +136,18 @@ extern "C" void solve(const float* input, float* output, int N) {
     double* d_l = nullptr;
     HIP_CHECK(hipMalloc(&d_m, sizeof(float)));
     HIP_CHECK(hipMalloc(&d_l, sizeof(double)));
-    onlineFinalReduceKernel<<<1, threads, smemOnline>>>(d_blockM, d_blockL, d_m, d_l, blocks);
+    onlineFinalReduceKernel<<<1, threads, smemOnline, stream>>>(d_blockM, d_blockL, d_m, d_l, blocks);
     HIP_CHECK(hipGetLastError());
 
-    // Pass2: 直接写出 y = exp(x - m) / max(l, 1e-12)
-    softmaxWriteKernel<<<blocks, threads>>>(d_x, d_y, N, d_m, d_l);
+    // Pass2: 直接写出 y = exp(x - m) / max(l, 1e-12) - 异步执行
+    softmaxWriteKernel<<<blocks, threads, 0, stream>>>(d_x, d_y, N, d_m, d_l);
     HIP_CHECK(hipGetLastError());
 
-    HIP_CHECK(hipMemcpy(output, d_y, sizeof(float) * (size_t)N, hipMemcpyDeviceToHost));
+    // 异步D2H传输
+    HIP_CHECK(hipMemcpyAsync(output, d_y, sizeof(float) * (size_t)N, hipMemcpyDeviceToHost, stream));
+    
+    // 等待所有异步操作完成
+    HIP_CHECK(hipStreamSynchronize(stream));
 
     // 清理资源
     HIP_CHECK(hipFree(d_x));
@@ -135,8 +156,15 @@ extern "C" void solve(const float* input, float* output, int N) {
     HIP_CHECK(hipFree(d_blockL));
     HIP_CHECK(hipFree(d_m));
     HIP_CHECK(hipFree(d_l));
-    HIP_CHECK(hipHostUnregister((void*)input));
-    HIP_CHECK(hipHostUnregister((void*)output));
+    
+    // 条件性注销页锁定内存
+    if (usePinnedMemory) {
+        HIP_CHECK(hipHostUnregister((void*)input));
+        HIP_CHECK(hipHostUnregister((void*)output));
+    }
+    
+    // 销毁流
+    HIP_CHECK(hipStreamDestroy(stream));
 }
 
 // --- 基于在线法的 (m,l) 分块计算 ---

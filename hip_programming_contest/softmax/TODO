@@ -79,5 +79,23 @@ Softmax 优化路线图与诊断步骤
 - 结论：当前环境最佳为 TPB=128（默认采用）。
 
 十、阶段结论（O4 LDS 银行冲突）
-- 分析：在线内核使用的 LDS 仅存放“每 warp 一个 (m,l)”的小数组（numWarps≤8），写入仅由各 warp 的 lane0 执行，读取由首个 warp 的前 numWarps 线程按顺序读取，地址连续、扇出低；按 AMD 32-bank、4B bank 宽度规则，访问模式不产生明显冲突。
+- 分析：在线内核使用的 LDS 仅存放"每 warp 一个 (m,l)"的小数组（numWarps≤8），写入仅由各 warp 的 lane0 执行，读取由首个 warp 的前 numWarps 线程按顺序读取，地址连续、扇出低；按 AMD 32-bank、4B bank 宽度规则，访问模式不产生明显冲突。
 - 结论：当前实现无须额外 padding 或 swizzling；如后续 profiling 暗示 LDS 热点，再引入 padding（+1）或 XOR 重排。
+
+十一、Profiling分析结果（2025-09-11）
+- 测试用例：testcases/10.in（最大数据集）
+- 关键发现：
+  * Kernel执行时间：95.2μs（onlinePartialKernel 46.4μs, onlineFinalReduceKernel 37.1μs, softmaxWriteKernel 11.7μs）
+  * HIP API时间：hipMemcpy 330.2ms (90.7%), hipHostRegister 32.3ms (8.9%), hipLaunchKernel 0.86ms (0.2%)
+  * 内存传输：H2D 233.8μs, D2H 247.8μs，总传输时间 481.6μs
+- 结论：性能瓶颈不是算法（95.2μs），而是内存传输（90.7%），需要系统级优化而非算法优化。
+
+十二、短期优化实施（O6 异步执行与智能内存管理）
+- 变更：引入HIP Streams异步执行，智能页锁定内存管理（N>1M阈值）
+- 实现：
+  * 创建hipStream_t用于异步执行
+  * 所有Kernel使用异步启动（<<<..., stream>>>）
+  * 内存传输使用hipMemcpyAsync
+  * 条件性页锁定内存注册（usePinnedMemory = N > 1000000）
+- 预期效果：小数据集减少8.9%页锁定内存开销，大数据集保持性能，整体提升GPU利用率
+- 状态：代码修改完成，待测试验证
