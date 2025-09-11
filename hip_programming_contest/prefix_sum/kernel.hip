@@ -10,7 +10,7 @@
 // 可调参数
 // -------------------------
 #ifndef BLOCK
-#define BLOCK 512 // 需为 warpSize 的倍数（在 AMD 上 warpSize=64）
+#define BLOCK 256 // 需为 warpSize 的倍数（在 AMD 上 warpSize=64）
 #endif
 
 #ifndef ITEMS_PER_THREAD
