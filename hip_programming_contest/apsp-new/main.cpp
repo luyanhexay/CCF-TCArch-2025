@@ -1,4 +1,4 @@
-#include "main.h" // 假设你的 solve 函数声明在此
+#include "main.h"
 #include <cstdio>
 #include <cctype>
 #include <vector>
@@ -12,8 +12,7 @@ static void hip_warmup_once()
     // 1) 提前创建上下文
     hipFree(0);                    // 常用的"唤醒设备"手段
     // 2) 提前创建 stream（如需）
-    hipStream_t s; 
-    hipStreamCreate(&s);
+    hipStream_t s; hipStreamCreate(&s);
     // 3) 发一个极小的 kernel，确保 code object 装载到驱动
     hipLaunchKernelGGL(warmup_kernel, dim3(1), dim3(1), 0, s);
     hipStreamSynchronize(s);
