@@ -61,7 +61,7 @@ __device__ void block_calc(int* C, int* A, int* B, int bj, int bi, int b, int st
   }
 }
 
-__global__ void floyd_warshall_block_kernel_phase1(int n, int oversized_n, int k, int* graph, int b) {
+extern "C" __global__ void floyd_warshall_block_kernel_phase1(int n, int oversized_n, int k, int* graph, int b) {
   const unsigned int bi = threadIdx.y;
   const unsigned int bj = threadIdx.x;
 
@@ -85,7 +85,7 @@ __global__ void floyd_warshall_block_kernel_phase1(int n, int oversized_n, int k
   update(graph, i, n, oversized_n, C[bi*stride+bj]);
 }
 
-__global__ void floyd_warshall_block_kernel_phase2_row(int n, int oversized_n, int k, int* graph, int b) {
+extern "C" __global__ void floyd_warshall_block_kernel_phase2_row(int n, int oversized_n, int k, int* graph, int b) {
   const unsigned int i = blockIdx.x;
   const unsigned int bi = threadIdx.y;
   const unsigned int bj = threadIdx.x;
@@ -113,7 +113,7 @@ __global__ void floyd_warshall_block_kernel_phase2_row(int n, int oversized_n, i
   update(graph, i1, n, oversized_n, C[bi*stride+bj]);
 }
 
-__global__ void floyd_warshall_block_kernel_phase2_col(int n, int oversized_n, int k, int* graph, int b) {
+extern "C" __global__ void floyd_warshall_block_kernel_phase2_col(int n, int oversized_n, int k, int* graph, int b) {
   const unsigned int j = blockIdx.x;
   const unsigned int bi = threadIdx.y;
   const unsigned int bj = threadIdx.x;
@@ -141,7 +141,7 @@ __global__ void floyd_warshall_block_kernel_phase2_col(int n, int oversized_n, i
   update(graph, i1, n, oversized_n, C[bi*stride+bj]);
 }
 
-__global__ void floyd_warshall_block_kernel_phase3(int n, int oversized_n, int k, int* graph, int b) {
+extern "C" __global__ void floyd_warshall_block_kernel_phase3(int n, int oversized_n, int k, int* graph, int b) {
   const unsigned int j = blockIdx.x;
   const unsigned int i = blockIdx.y;
   const unsigned int bi = threadIdx.y;

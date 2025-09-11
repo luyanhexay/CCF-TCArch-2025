@@ -12,7 +12,7 @@ COMPILER="hipcc"
 CXX_FLAGS="-O2"
 
 # 源文件和可执行文件名
-SOURCE_FILES="main.cpp kernel.hip blocked_floyd_warshall_hip.hip" # APSP 已拆分：主程序 + 核心
+SOURCE_FILES="main.cpp kernel.hip blocked_floyd_warshall_hip.hip apsp_solver_kernels.hip apsp_solver.cpp memory_pool.cpp" # APSP 已拆分：主程序 + 核心 + 求解器 + GPU kernels + 内存池
 EXECUTABLE="apsp"
 
 # 测试用例和输出结果的目录
