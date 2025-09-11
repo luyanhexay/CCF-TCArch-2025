@@ -2,7 +2,7 @@ HIPCC = hipcc
 
 TARGET = apsp
 
-SRCS = main.cpp kernel.hip
+SRCS = main.cpp kernel.hip blocked_floyd_warshall_hip.hip
 
 HEADERS = main.h
 
