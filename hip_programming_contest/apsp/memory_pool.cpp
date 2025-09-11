@@ -1,6 +1,5 @@
 #include "memory_pool.h"
 #include <iostream>
-#include <algorithm>
 
 // HIP错误检查宏
 #define HIP_CHECK(cmd) do { \
